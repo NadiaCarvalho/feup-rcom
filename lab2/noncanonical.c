@@ -14,6 +14,11 @@
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 #define FALSE 0
 #define TRUE 1
+#define FLAG 0x7E 
+#define SEND 0x03
+#define RECEIVE 0x01
+#define SET 0x03
+#define UA 0x07
 
 volatile int STOP=FALSE;
 
@@ -104,4 +109,25 @@ int main(int argc, char** argv)
     tcsetattr(fd,TCSANOW,&oldtio);
     close(fd);
     return 0;
+}
+
+int send_US_frame(int fd, int control_bit) {
+char buf[5];
+
+        buf[0] = FLAG;
+buf[1] = SEND;
+buf[2] = control_bit;
+buf[3] = buf[1] ^ buf[2];
+buf[4] = FLAG;
+
+int buf_len = 5;
+int res = 0;
+        int written_chars = 0;
+
+        while(written_chars < buf_len){
+        res = write(fd,buf, buf_len);
+                if(res == 0) break;
+                written_chars += res;
+        printf("%d bytes written\n", res);
+        }
 }
