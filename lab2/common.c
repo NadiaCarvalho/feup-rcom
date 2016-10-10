@@ -39,6 +39,21 @@ int read_message(int fd, char* msg, int* msg_len) {
 void print_as_hexadecimal(char *msg, int msg_len) {
         int i;
         for(i = 0; i < msg_len; i++)
-                printf("%02X ", msg[i]);
+                printf("%02X \n", msg[i]);
         fflush(stdout);
+}
+
+int send_US_frame(int fd, int control_bit) {
+        char buf[6];
+
+        buf[0] = FLAG;
+        buf[1] = SEND;
+        buf[2] = control_bit;
+        buf[3] = buf[1] ^ buf[2];
+        buf[4] = FLAG;
+	buf[5] = 0;
+
+        int buf_len = 6;
+
+	return send_message(fd, buf, buf_len);
 }

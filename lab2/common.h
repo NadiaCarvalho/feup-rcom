@@ -23,3 +23,8 @@ int read_message(int fd, char* msg, int* msg_len);
 * Prints msg with msg length to the screen in hexadecimal format.
 */
 void print_as_hexadecimal(char *msg, int msg_len);
+
+/**
+* Write a message in fd, according to the control_bit given, using the *function send_message.
+*/
+int send_US_frame(int fd, int control_bit);

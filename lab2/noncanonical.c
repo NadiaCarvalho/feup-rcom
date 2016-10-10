@@ -71,8 +71,10 @@ int main(int argc, char** argv)
         read_message(fd, msg, &msg_len);
         print_as_hexadecimal(msg, msg_len);
 
-        //Write to the serial port
-        send_message(fd, msg, msg_len);
+
+
+        //Write to the serial port the UA after as a response to the information received before.
+        send_US_frame(fd,UA);
 
         /*
            O ciclo WHILE deve ser alterado de modo a respeitar o indicado no gui�o
