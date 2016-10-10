@@ -7,6 +7,9 @@
 #define SET 0x03
 #define UA 0x07
 
+#define TIMEOUT 3
+#define RETRY 3
+
 
 /**
 * Write the message in buf, with buf_length length to fd.

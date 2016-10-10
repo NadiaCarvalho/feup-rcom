@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 #include "common.h"
 
 volatile int STOP=FALSE;
@@ -13,7 +14,6 @@ int send_message(int fd, char* buf, int buf_length) {
                 res = write(fd,buf, buf_length);
                 if(res == 0) break;
                 written_chars += res;
-                printf("%d bytes written.\n", res);
         }
 
         return 0;
@@ -28,9 +28,16 @@ int read_message(int fd, char* msg, int* msg_len) {
         while (STOP==FALSE) {   /* loop for input */
                 res = read(fd,buf,255); /* returns after x chars have been input */
 
-                if (buf[res-1]== 0)  STOP=TRUE;
-                memcpy(msg+(*msg_len), buf, res);
-                (*msg_len) += res;
+		if(res > 0) {
+        	       if (buf[res-1]== 0)  STOP=TRUE;
+	                memcpy(msg+(*msg_len), buf, res);
+                	(*msg_len) += res;
+		} else {
+			if(errno == EINTR)		
+				return -1;
+			else
+				return 0;
+		}
         }
 
         return 0;
