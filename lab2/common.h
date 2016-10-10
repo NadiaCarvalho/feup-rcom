@@ -20,6 +20,12 @@ int send_message(int fd, char* buf, int buf_length);
 int read_message(int fd, char* msg, int* msg_len);
 
 /**
+* Send the Supervision or Unnumered frame with the following
+* control bit.
+*/
+int send_US_frame(int fd, int control_bit);
+
+/**
 * Prints msg with msg length to the screen in hexadecimal format.
 */
 void print_as_hexadecimal(char *msg, int msg_len);

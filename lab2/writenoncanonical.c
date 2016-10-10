@@ -18,25 +18,6 @@ int parse_flag(char *packet) {
         return 0;
 }
 
-/**
- * Sends the SET packet to the file descriptor.
- * The SET packet is made up of the following bytes: F|A|C|BCC|F.
- */
-int send_SET_packet(int fd) {
-        char buf[6];
-
-        buf[0] = FLAG;
-        buf[1] = SEND;
-        buf[2] = SET;
-        buf[3] = buf[1] ^ buf[2];
-        buf[4] = FLAG;
-        buf[5] = 0;
-
-        int buf_len = 6;
-
-        return send_message(fd, buf, buf_len);
-}
-
 int main(int argc, char** argv)
 {
         int fd;
@@ -99,7 +80,7 @@ int main(int argc, char** argv)
            send_message(fd, buf, strlen(buf)+1);*/
 
         printf("Sending SET packet...\n");
-        send_SET_packet(fd);
+        send_US_frame(fd, SET);
         printf("SET packet sent.\n");
         /*
            O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar
