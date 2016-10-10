@@ -29,7 +29,6 @@ int read_message(int fd, char* msg, int* msg_len) {
                 res = read(fd,buf,255); /* returns after x chars have been input */
 
                 if (buf[res-1]== 0)  STOP=TRUE;
-                printf("res: %d", res);
                 memcpy(msg+(*msg_len), buf, res);
                 (*msg_len) += res;
         }
