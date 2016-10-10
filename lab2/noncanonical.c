@@ -8,26 +8,37 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "common.h"
 
-
-#define BAUDRATE B9600
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
-#define FALSE 0
-#define TRUE 1
-#define FLAG 0x7E
-#define SEND 0x03
-#define RECEIVE 0x01
-#define SET 0x03
-#define UA 0x07
 
-volatile int STOP=FALSE;
+int send_US_frame(int fd, int control_bit) {
+        char buf[5];
+
+        buf[0] = FLAG;
+        buf[1] = SEND;
+        buf[2] = control_bit;
+        buf[3] = buf[1] ^ buf[2];
+        buf[4] = FLAG;
+
+        int buf_len = 5;
+        int res = 0;
+        int written_chars = 0;
+
+        while(written_chars < buf_len) {
+                res = write(fd,buf, buf_len);
+                if(res == 0) break;
+                written_chars += res;
+                printf("%d bytes written\n", res);
+        }
+
+        return 0;
+}
 
 int main(int argc, char** argv)
 {
-        int fd,c, res;
+        int fd;
         struct termios oldtio,newtio;
-        char buf[255];
-        char msg[255];
 
         if ( (argc < 2) ||
              ((strcmp("/dev/ttyS0", argv[1])!=0) &&
@@ -62,14 +73,10 @@ int main(int argc, char** argv)
         newtio.c_cc[VTIME]    = 0;/* inter-character timer unused in 1/10th of a second*/
         newtio.c_cc[VMIN]     = 1;/* blocking read until x chars received */
 
-
-
         /*
            VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
            leitura do(s) pr�ximo(s) caracter(es)
          */
-
-
 
         tcflush(fd, TCIOFLUSH);
 
@@ -80,24 +87,15 @@ int main(int argc, char** argv)
 
         printf("New termios structure set\n");
 
-        while (STOP==FALSE) {   /* loop for input */
-                res = read(fd,buf,255); /* returns after x chars have been input */
-                buf[res]=0;     /* so we can printf... */
-                strcat(msg,buf);
-                if (buf[res-1]== 0) STOP=TRUE;
-        }
 
-        printf("%s\n", msg);
+        //Read from the serial port
+        char msg[255] = "";
+        int msg_len;
+        read_message(fd, msg, &msg_len);
+        print_as_hexadecimal(msg, msg_len);
 
-        int written_chars = 0;
-
-        while(written_chars < strlen(msg)+1) {
-                res = write(fd,msg, strlen(msg)+1);
-                if(res == 0) break;
-
-                written_chars += res;
-                printf("%d bytes written\n", res);
-        }
+        //Write to the serial port
+        send_message(fd, msg, msg_len);
 
         /*
            O ciclo WHILE deve ser alterado de modo a respeitar o indicado no gui�o
@@ -106,25 +104,4 @@ int main(int argc, char** argv)
         tcsetattr(fd,TCSANOW,&oldtio);
         close(fd);
         return 0;
-}
-
-int send_US_frame(int fd, int control_bit) {
-        char buf[5];
-
-        buf[0] = FLAG;
-        buf[1] = SEND;
-        buf[2] = control_bit;
-        buf[3] = buf[1] ^ buf[2];
-        buf[4] = FLAG;
-
-        int buf_len = 5;
-        int res = 0;
-        int written_chars = 0;
-
-        while(written_chars < buf_len) {
-                res = write(fd,buf, buf_len);
-                if(res == 0) break;
-                written_chars += res;
-                printf("%d bytes written\n", res);
-        }
 }

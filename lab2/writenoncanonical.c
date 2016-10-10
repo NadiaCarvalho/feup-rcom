@@ -8,26 +8,39 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "common.h"
 
-#define BAUDRATE B9600
 #define MODEMDEVICE "/dev/ttyS1"
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
-#define FALSE 0
-#define TRUE 1
-#define FLAG 0x7E
-#define SEND 0x03
-#define RECEIVE 0x01
-#define SET 0x03
-#define UA 0x07
 
-volatile int STOP=FALSE;
+int parse_flag(char *packet) {
+
+        return 0;
+}
+
+/**
+ * Sends the SET packet to the file descriptor.
+ * The SET packet is made up of the following bytes: F|A|C|BCC|F.
+ */
+int send_SET_packet(int fd) {
+        char buf[6];
+
+        buf[0] = FLAG;
+        buf[1] = SEND;
+        buf[2] = SET;
+        buf[3] = buf[1] ^ buf[2];
+        buf[4] = FLAG;
+        buf[5] = 0;
+
+        int buf_len = 6;
+
+        return send_message(fd, buf, buf_len);
+}
 
 int main(int argc, char** argv)
 {
-        int fd,c, res;
+        int fd;
         struct termios oldtio,newtio;
-        char buf[255];
-        int i, sum = 0, speed = 0;
 
         if ( (argc < 2) ||
              ((strcmp("/dev/ttyS0", argv[1])!=0) &&
@@ -69,8 +82,6 @@ int main(int argc, char** argv)
            leitura do(s) pr�ximo(s) caracter(es)
          */
 
-
-
         tcflush(fd, TCIOFLUSH);
 
         if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
@@ -80,79 +91,31 @@ int main(int argc, char** argv)
 
         printf("New termios structure set\n");
 
-        printf("Insert your sentence here: ");
-        gets(buf);
+        //REad the message from stdin and send it.
 
-        /*testing*/
-        //buf[25] = '\n';
+        /*printf("Insert your sentence here: ");
 
-        int written_chars = 0;
+           gets(buf);
+           send_message(fd, buf, strlen(buf)+1);*/
 
-        while(written_chars < strlen(buf)+1) {
-                res = write(fd,buf, strlen(buf)+1);
-                if(res == 0) break;
-                written_chars += res;
-                printf("%d bytes written\n", res);
-
-        }
-
-
+        printf("Sending SET packet...\n");
+        send_SET_packet(fd);
+        printf("SET packet sent.\n");
         /*
            O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar
            o indicado no gui�o
          */
 
-        char msg[256] = "";
-
-        while (STOP==FALSE) { /* loop for input */
-                res = read(fd,buf,255); /* returns after x chars have been input */
-                buf[res]=0;     /* so we can printf... */
-                strcat(msg, buf);
-                if (buf[res-1]== 0) STOP=TRUE;
-        }
-
-        i = 0;
-        while(msg[i] != '\0') {
-                printf("%X ", msg[i]);
-                fflush(stdout);
-                i++;
-        }
+        char msg[255] = "";
+        int msg_len;
+        read_message(fd, msg, &msg_len);
+        print_as_hexadecimal(msg, msg_len);
 
         if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
                 perror("tcsetattr");
                 exit(-1);
         }
 
-
-
-
         close(fd);
         return 0;
-}
-
-
-int parseFlag(char *packet) {
-
-}
-
-// F|A|C|BCC|F
-int send_SET_flag(int fd) {
-        char buf[5];
-
-        buf[0] = FLAG;
-        buf[1] = SEND;
-        buf[2] = SET;
-        buf[3] = buf[1] ^ buf[2];
-        buf[4] = FLAG;
-
-        int buf_len = 5;
-        int res = 0;
-        int written_chars = 0;
-
-        while(written_chars < buf_len) {
-                res = write(fd,buf, buf_len);
-                if(res == 0) break;
-                written_chars += res;
-                printf("%d bytes written\n", res);
-        }
 }

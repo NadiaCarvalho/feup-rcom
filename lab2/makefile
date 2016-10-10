@@ -1,10 +1,16 @@
 CC=gcc
-CFLAGS=-Wall
+CFLAGS=-Wall -I.
 
-files: send receive
+files: send receive erase
 
-send: writenoncanonical.c
-	$(CC) writenoncanonical.c -o send $(CFLAGS)
+send: writenoncanonical.c common.o
+	$(CC) writenoncanonical.c common.o -o send $(CFLAGS)
 
-receive: noncanonical.c
-	$(CC) noncanonical.c -o receive $(CFLAGS)
+receive: noncanonical.c common.o
+	$(CC) noncanonical.c common.o -o receive $(CFLAGS)
+
+clean:
+	rm -f send receive common.o
+
+erase:
+	rm -f common.o
