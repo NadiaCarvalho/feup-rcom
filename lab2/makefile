@@ -3,14 +3,14 @@ CFLAGS=-Wall -I.
 
 files: send receive erase
 
-send: writenoncanonical.c common.o
-	$(CC) writenoncanonical.c common.o -o send $(CFLAGS)
+send: writenoncanonical.c data_link_layer.o
+	$(CC) writenoncanonical.c data_link_layer.o -o send $(CFLAGS)
 
-receive: noncanonical.c common.o
-	$(CC) noncanonical.c common.o -o receive $(CFLAGS)
+receive: noncanonical.c data_link_layer.o
+	$(CC) noncanonical.c data_link_layer.o -o receive $(CFLAGS)
 
 clean:
-	rm -f send receive common.o
+	rm -f send receive data_link_layer.o
 
 erase:
-	rm -f common.o
+	rm -f common.o data_link_layer.o
