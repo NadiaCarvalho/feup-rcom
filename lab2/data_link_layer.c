@@ -118,6 +118,7 @@ int send_US_frame(int fd, int control_bit) { // Debug function
 }
 
 int ll_open(char *terminal, struct termios *old_port_settings, Status status) {
+
   int fd = open(terminal, O_RDWR | O_NOCTTY);
 
   if (fd < 0) {
@@ -182,6 +183,7 @@ int ll_open(char *terminal, struct termios *old_port_settings, Status status) {
   printf("Connection established.\n");
   return fd;
 }
+
 
 int ll_write(int fd, char *msg, int len) {
   // Writes and checks for validity
