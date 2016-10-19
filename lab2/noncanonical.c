@@ -28,6 +28,11 @@ int main(int argc, char **argv) {
    */
   fd = ll_open(argv[1], &oldtio, RECEIVER);
 
+  if (fd < 0) {
+    printf("Error opening file descriptor. Exiting...\n");
+    return -1;
+  }
+
   ll_close(fd, &oldtio);
   return 0;
 }

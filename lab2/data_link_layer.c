@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
@@ -13,6 +14,10 @@
 volatile int STOP = 0;
 int connection_timeouts = 0;
 
+struct {
+  Status status;
+} data_link_layer;
+
 void print_as_hexadecimal(char *msg, int msg_len) {
   int i;
   for (i = 0; i < msg_len; i++)
@@ -21,6 +26,31 @@ void print_as_hexadecimal(char *msg, int msg_len) {
 }
 
 void timeout(int signum) { connection_timeouts++; }
+
+char *create_US_frame(int *frame_len, int control_bit) {
+  char *buf = (char *)malloc(6 * sizeof(char));
+  buf[0] = FLAG;
+
+  if (data_link_layer.status == TRANSMITTER) {
+    if (control_bit == SET || control_bit == DISC)
+      buf[1] = SEND;
+    else
+      buf[1] = RECEIVE;
+  } else {
+    if (control_bit == RR || control_bit == REJ || control_bit == UA)
+      buf[1] = SEND;
+    else
+      buf[1] = RECEIVE;
+  }
+
+  buf[2] = control_bit;
+  buf[3] = buf[1] ^ buf[2];
+  buf[4] = FLAG;
+  buf[5] = 0;
+  *frame_len = 6;
+
+  return buf;
+}
 
 int write_to_tty(int fd, char *buf, int buf_length) {
   int total_written_chars = 0;
@@ -62,15 +92,24 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
   return 0;
 }
 
-int is_frame_UA(char *reply, int reply_len) {
-  return (reply[0] == FLAG && reply[1] == SEND && reply[2] == UA &&
-          reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
+int is_frame_UA(char *reply) {
+  return (
+      reply[0] == FLAG &&
+      reply[1] == ((data_link_layer.status == TRANSMITTER) ? SEND : RECEIVE) &&
+      reply[2] == UA && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
 }
 
-//is_reply_valid is a function that checks if the reply received is valid.
-//If it is, the send_frame ends correctly. If not, it continues its loop.
-int send_frame(int fd, char *frame, int len,
-               int (*is_reply_valid)(char *, int)) {
+int is_frame_DISC(char *reply) {
+  return (reply[0] == FLAG &&
+          reply[1] ==
+              ((data_link_layer.status == TRANSMITTER) ? RECEIVE : SEND) &&
+          reply[2] == DISC && reply[3] == (reply[1] ^ reply[2]) &&
+          reply[4] == FLAG);
+}
+
+// is_reply_valid is a function that checks if the reply received is valid.
+// If it is, the send_frame ends correctly. If not, it continues its loop.
+int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
   struct sigaction new_action, old_action;
   char reply[255];
   int reply_len;
@@ -88,9 +127,11 @@ int send_frame(int fd, char *frame, int len,
 
     if (read_from_tty(fd, reply, &reply_len) ==
         0) { // If the read() was successful
-      if (is_reply_valid(reply, reply_len))
+      if (is_reply_valid(reply))
         break;
     }
+    printf("Connection failed. Retrying %d out of %d...\n", connection_timeouts,
+           ACCEPTABLE_TIMEOUTS);
   }
 
   if (sigaction(SIGALRM, &old_action, NULL) == -1)
@@ -102,22 +143,14 @@ int send_frame(int fd, char *frame, int len,
     return 0;
 }
 
-int send_US_frame(int fd, int control_bit) { // Debug function
-  char buf[6];
-
-  buf[0] = FLAG;
-  buf[1] = SEND;
-  buf[2] = control_bit;
-  buf[3] = buf[1] ^ buf[2];
-  buf[4] = FLAG;
-  buf[5] = 0;
-
-  int buf_len = 6;
-
-  return write_to_tty(fd, buf, buf_len);
-}
-
 int ll_open(char *terminal, struct termios *old_port_settings, Status status) {
+  if (status != TRANSMITTER && status != RECEIVER) {
+    printf("Invalid status.\n");
+    return -1;
+  }
+
+  data_link_layer.status = status;
+
   int fd = open(terminal, O_RDWR | O_NOCTTY);
 
   if (fd < 0) {
@@ -153,15 +186,10 @@ int ll_open(char *terminal, struct termios *old_port_settings, Status status) {
     return -1;
   }
 
+  int frame_len;
   if (status == TRANSMITTER) {
-    char buf[6];
-    buf[0] = FLAG;
-    buf[1] = SEND;
-    buf[2] = SET;
-    buf[3] = buf[1] ^ buf[2];
-    buf[4] = FLAG;
-    buf[5] = 0;
-    if (send_frame(fd, buf, 6, is_frame_UA) == -1) {
+    char *frame = create_US_frame(&frame_len, SET);
+    if (send_frame(fd, frame, frame_len, is_frame_UA) == -1) {
       close(fd);
       return -1;
     }
@@ -169,17 +197,11 @@ int ll_open(char *terminal, struct termios *old_port_settings, Status status) {
     char msg[255];
     int msg_len;
     read_from_tty(fd, msg, &msg_len);
-    char buf[6];
-    buf[0] = FLAG;
-    buf[1] = SEND;
-    buf[2] = UA;
-    buf[3] = buf[1] ^ buf[2];
-    buf[4] = FLAG;
-    buf[5] = 0;
-    write_to_tty(fd, buf, 6);
+    char *frame = create_US_frame(&frame_len, UA);
+    write_to_tty(fd, frame, frame_len);
   }
 
-  printf("Connection established.\n");
+  printf("Connection succesfully established.\n");
   return fd;
 }
 
@@ -198,6 +220,23 @@ int ll_read(int fd, char *msg, int *len) {
 }
 
 int ll_close(int fd, struct termios *old_port_settings) {
+  char *frame;
+  int frame_len = 0;
+
+  if (data_link_layer.status == TRANSMITTER) {
+    frame = create_US_frame(&frame_len, DISC);
+    send_frame(fd, frame, frame_len, is_frame_DISC);
+    write_to_tty(fd, create_US_frame(&frame_len, UA), frame_len);
+  } else {
+    char msg[256];
+    int msg_len = 0;
+    read_from_tty(fd, msg, &msg_len);
+    if (is_frame_DISC(msg)) {
+      frame = create_US_frame(&frame_len, DISC);
+      send_frame(fd, frame, frame_len, is_frame_UA);
+    }
+  }
+
   // Send DISC to receiver
   // Wait for DISC
   // Send UA
@@ -210,5 +249,6 @@ int ll_close(int fd, struct termios *old_port_settings) {
     return -1;
   }
 
+  printf("Connection succesfully closed.\n");
   return 0;
 }

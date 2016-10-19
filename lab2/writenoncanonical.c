@@ -14,14 +14,6 @@
 #define MODEMDEVICE "/dev/ttyS1"
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 
-int is_UA(char *msg, int msg_len) {
-  if (msg_len >= 5)
-    return 1;
-
-  return (msg[0] == FLAG && msg[1] == SEND && msg[2] == UA &&
-          msg[3] == (msg[1] ^ msg[2]) && msg[4] == FLAG);
-}
-
 int main(int argc, char **argv) {
   int fd;
   struct termios oldtio;
@@ -37,7 +29,12 @@ int main(int argc, char **argv) {
      because we don't want to get killed if linenoise sends CTRL-C.
    */
   fd = ll_open(argv[1], &oldtio, TRANSMITTER);
-  
+
+  if(fd < 0) {
+    printf("Error opening file descriptor. Exiting...\n");
+    return -1;
+  }
+
   ll_close(fd, &oldtio);
   return 0;
 }

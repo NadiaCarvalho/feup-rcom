@@ -1,10 +1,15 @@
 #include <termios.h>
 
 #define FLAG 0x7E
+
 #define SEND 0x03
 #define RECEIVE 0x01
+
 #define SET 0x03
 #define UA 0x07
+#define DISC 0x0B
+#define RR 0x05
+#define REJ 0x01
 
 typedef enum { TRANSMITTER, RECEIVER } Status;
 
@@ -40,6 +45,5 @@ int ll_close(int fd, struct termios *old_port_settings);
 
 //Debug functions
 int read_from_tty(int fd, char *frame, int *frame_len);
-int send_US_frame(int fd, int control_bit);
 int send_frame(int fd, char *frame, int len,
-               int (*is_reply_valid)(char *, int));
+               int (*is_reply_valid)(char *));
