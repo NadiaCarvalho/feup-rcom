@@ -205,6 +205,7 @@ int ll_open(char *terminal, struct termios *old_port_settings, Status status) {
   return fd;
 }
 
+
 int ll_write(int fd, char *msg, int len) {
   // Writes and checks for validity
   // Using send_frame
