@@ -105,10 +105,10 @@ int ll_write(int fd, char *packet, int packet_len) {
   // Using send_frame
   int frame_len;
   char *frame = create_I_frame(&frame_len, packet, packet_len);
+
   // send_frame()
   // write_to_tty(fd, frame, frame_len);
-
-  if (send_frame(fd, frame, frame_len, is_frame_RR) == 0)
+    if (send_frame(fd, frame, frame_len, is_frame_RR) == 0)
     printf("Received RR.\n");
   else
     printf("Didn't receive RR.\n");

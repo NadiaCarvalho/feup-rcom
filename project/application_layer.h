@@ -1,3 +1,12 @@
+#include <stdio.h>
+
+typedef enum { TRANSMITTER, RECEIVER } status;
+
+typedef struct {
+  int file_descriptor;  /* Serial port file descriptor */
+  status app_layer_status; /* TRANSMITTER | RECEIVER */
+} application_layer;
+
 /**
 * Opens the terminal refered to by terminal.
 * Updates the port settings and saves the old ones in

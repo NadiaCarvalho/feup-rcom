@@ -11,9 +11,20 @@
 #define RR 0x05
 #define REJ 0x01
 
-typedef enum { TRANSMITTER, RECEIVER } Status;
+typedef struct {
+  char port[20];              /* Serial port device e.g. /dev/ttyS0 */
+  int baud_rate;
+  unsigned int sequence_num;  /* Frame sequence number (0 or 1) */
+  unsigned int timeout;       /* Time to timeout e.g. 1 second */
+  unsigned int num_retries;   /* Maximum number of retries */
+} link_layer;
 
 //Debug functions
 int read_from_tty(int fd, char *frame, int *frame_len);
 int send_frame(int fd, char *frame, int len,
                int (*is_reply_valid)(char *));
+
+
+int is_frame_UA(char *reply);
+int is_frame_RR(char *reply);
+int is_frame_DISC(char *reply);

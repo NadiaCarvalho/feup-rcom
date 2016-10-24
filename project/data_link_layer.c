@@ -14,10 +14,6 @@
 volatile int STOP = 0;
 int connection_timeouts = 0;
 
-struct {
-  Status status;
-} data_link_layer;
-
 void print_as_hexadecimal(char *msg, int msg_len) {
   int i;
   for (i = 0; i < msg_len; i++)
