@@ -1,13 +1,15 @@
 #include "data_link_layer.h"
 #include "application_layer.h"
 
+app_layer application;
+
 int ll_open(char *terminal, struct termios *old_port_settings, Status status) {
   if (status != TRANSMITTER && status != RECEIVER) {
     printf("Invalid status.\n");
     return -1;
   }
 
-  data_link_layer.status = status;
+  application.status = status;
 
   int fd = open(terminal, O_RDWR | O_NOCTTY);
 
@@ -15,6 +17,8 @@ int ll_open(char *terminal, struct termios *old_port_settings, Status status) {
     printf("Error opening terminal '%s'\n", terminal);
     return -1;
   }
+
+  applicaton.file_descriptor = fd;
 
   if (tcgetattr(fd, old_port_settings) == -1) { /* save current port settings */
     printf("Error getting port settings.\n");

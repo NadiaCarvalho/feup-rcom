@@ -5,7 +5,7 @@ typedef enum { TRANSMITTER, RECEIVER } status;
 typedef struct {
   int file_descriptor;  /* Serial port file descriptor */
   status app_layer_status; /* TRANSMITTER | RECEIVER */
-} application_layer;
+} app_layer;
 
 /**
 * Opens the terminal refered to by terminal.
