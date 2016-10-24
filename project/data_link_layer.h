@@ -1,4 +1,5 @@
 #include <termios.h>
+#include "application_layer.h"
 
 #define FLAG 0x7E
 
@@ -19,12 +20,19 @@ typedef struct {
   unsigned int num_retries;   /* Maximum number of retries */
 } link_layer;
 
+/**
+ * Establishes a connection between the receiver and the transmitter
+ */
+int set_up_connection(char* port, app_layer application);
+
 //Debug functions
+int write_to_tty(int fd, char *buf, int buf_length);
 int read_from_tty(int fd, char *frame, int *frame_len);
 int send_frame(int fd, char *frame, int len,
                int (*is_reply_valid)(char *));
 
 
+char *create_US_frame(int *frame_len, int control_bit);
 int is_frame_UA(char *reply);
 int is_frame_RR(char *reply);
 int is_frame_DISC(char *reply);

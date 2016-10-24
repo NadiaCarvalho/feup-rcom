@@ -16,6 +16,30 @@ int connection_timeouts = 0;
 
 link_layer data_link;
 
+int set_up_connection(char* port, app_layer application){
+
+  strcpy(data_link.port,port);
+
+  int frame_len;
+  if (application.app_layer_status == TRANSMITTER) {
+    char *frame = create_US_frame(&frame_len, SET);
+    if (send_frame(application.file_descriptor, frame, frame_len, is_frame_UA) == -1) {
+      close(application.file_descriptor);
+      return -1;
+    }
+  } else {
+    char msg[255];
+    int msg_len;
+    read_from_tty(application.file_descriptor, msg, &msg_len);
+    char *frame = create_US_frame(&frame_len, UA);
+    write_to_tty(application.file_descriptor, frame, frame_len);
+  }
+
+  printf("Connection succesfully established.\n");
+
+  return 0;
+}
+
 void print_as_hexadecimal(char *msg, int msg_len) {
   int i;
   for (i = 0; i < msg_len; i++)
@@ -29,7 +53,7 @@ char *create_US_frame(int *frame_len, int control_bit) {
   char *buf = (char *)malloc(6 * sizeof(char));
   buf[0] = FLAG;
 
-  if (data_link_layer.status == TRANSMITTER) {
+  if (data_link.status == TRANSMITTER) {
     if (control_bit == SET || control_bit == DISC)
       buf[1] = SEND;
     else
@@ -93,14 +117,14 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
 int is_frame_UA(char *reply) {
   return (
       reply[0] == FLAG &&
-      reply[1] == ((data_link_layer.status == TRANSMITTER) ? SEND : RECEIVE) &&
+      reply[1] == ((data_link.status == TRANSMITTER) ? SEND : RECEIVE) &&
       reply[2] == UA && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
 }
 
 int is_frame_DISC(char *reply) {
   return (reply[0] == FLAG &&
           reply[1] ==
-              ((data_link_layer.status == TRANSMITTER) ? RECEIVE : SEND) &&
+              ((data_link.status == TRANSMITTER) ? RECEIVE : SEND) &&
           reply[2] == DISC && reply[3] == (reply[1] ^ reply[2]) &&
           reply[4] == FLAG);
 }
@@ -139,4 +163,28 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
     return -1;
   else
     return 0;
+}
+
+
+int is_frame_RR(char *reply) {
+  return (
+      reply[0] == FLAG &&
+      reply[1] == ((data_link.status == TRANSMITTER) ? SEND : RECEIVE) &&
+      reply[2] == RR && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
+}
+
+char *create_I_frame(int *frame_len, char *packet, int packet_len) {
+  char *frame =
+      (char *)malloc((6 + packet_len) * sizeof(char)); // Lacks byte stuffing
+  *frame_len = 6 + packet_len;
+
+  frame[0] = FLAG;
+  frame[1] = SEND;
+  frame[2] = 0 | (1 << 6);
+  frame[3] = 0xFF;
+  memcpy(frame + 4, packet, packet_len);
+  frame[packet_len + 4] = 0xFF;
+  frame[packet_len + 5] = FLAG;
+
+  return frame;
 }

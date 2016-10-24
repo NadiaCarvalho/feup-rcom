@@ -15,7 +15,7 @@ typedef struct {
 * Returns the according file descriptor on success,
 * returning -1 otherwise.
 */
-int ll_open(char* terminal, struct termios *old_port_settings, Status status);
+int ll_open(char* terminal, struct termios *old_port_settings, status app_layer_status);
 
 /**
 * Writes the given msg with len length to the
