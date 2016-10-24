@@ -14,31 +14,119 @@
 volatile int STOP = 0;
 int connection_timeouts = 0;
 
-link_layer data_link;
 
-int set_up_connection(char* port, app_layer application){
+/**
+ * TODO:
+ * if stat == TRANSMITTER -> send SET, receive UA
+ * reverse if stat == RECEIVE
+ */
+int ll_open(int port, status stat) {
+  switch (port){
+    case COM1:
+      strcpy(data_link.port, COM1_PORT);
+      break;
 
-  strcpy(data_link.port,port);
+    case COM2:
+      strcpy(data_link.port, COM2_PORT);
+      break;
 
+    default:
+      printf("data_link_layer :: ll_open() :: invalid port!\n");
+      return -1;
+  }
+
+  if (stat != TRANSMITTER && stat != RECEIVER) {
+    printf("data_link_layer :: ll_open() :: Invalid status.\n");
+    return -1;
+  }
+
+  /**
+   * Opening the serial port
+   */
+  int fd; //value to be returned
+  if ((fd = open(data_link.port, O_RDWR | O_NOCTTY)) < 0) {
+    printf("Error opening terminal '%s'\n", data_link.port);
+    return -1;
+  }
   int frame_len;
-  if (application.app_layer_status == TRANSMITTER) {
+
+  if (stat == TRANSMITTER) {
     char *frame = create_US_frame(&frame_len, SET);
-    if (send_frame(application.file_descriptor, frame, frame_len, is_frame_UA) == -1) {
-      close(application.file_descriptor);
+    if (send_frame(fd, frame, frame_len, is_frame_UA) == -1) {
+      printf("data_link_layer :: ll_open() :: send_frame failed\n");
+      close(fd);
       return -1;
     }
   } else {
     char msg[255];
     int msg_len;
-    read_from_tty(application.file_descriptor, msg, &msg_len);
+    read_from_tty(fd, msg, &msg_len);
     char *frame = create_US_frame(&frame_len, UA);
-    write_to_tty(application.file_descriptor, frame, frame_len);
+    write_to_tty(fd, frame, frame_len);
   }
 
-  printf("Connection succesfully established.\n");
+  printf("data_link_layer :: ll_open() :: connection succesfully established.\n");
+
+  return fd;
+}
+
+int ll_write(int fd, char *packet, int packet_len) {
+  // Writes and checks for validity
+  // Using send_frame
+  int frame_len;
+  char *frame = create_I_frame(&frame_len, packet, packet_len);
+
+  // send_frame()
+  // write_to_tty(fd, frame, frame_len);
+    if (send_frame(fd, frame, frame_len, is_frame_RR) == 0)
+    printf("Received RR.\n");
+  else
+    printf("Didn't receive RR.\n");
 
   return 0;
 }
+
+int ll_read(int fd, char *msg, int *len) {
+  // Reads and checks for validity
+  //
+
+  return 0;
+}
+
+int ll_close(int fd, struct termios *old_port_settings) {
+  char *frame;
+  int frame_len = 0;
+
+  if (application.app_layer_status == TRANSMITTER) {
+    frame = create_US_frame(&frame_len, DISC);
+    send_frame(fd, frame, frame_len, is_frame_DISC);
+    write_to_tty(fd, create_US_frame(&frame_len, UA), frame_len);
+  } else {
+    char msg[256];
+    int msg_len = 0;
+    read_from_tty(fd, msg, &msg_len);
+    if (is_frame_DISC(msg)) {
+      frame = create_US_frame(&frame_len, DISC);
+      send_frame(fd, frame, frame_len, is_frame_UA);
+    }
+  }
+
+  // Send DISC to receiver
+  // Wait for DISC
+  // Send UA
+
+  if (tcsetattr(fd, TCSANOW, old_port_settings) == -1)
+    printf("Error settings old port settings.\n");
+
+  if (close(fd)) {
+    printf("Error closing terminal file descriptor.\n");
+    return -1;
+  }
+
+  printf("Connection succesfully closed.\n");
+  return 0;
+}
+
 
 void print_as_hexadecimal(char *msg, int msg_len) {
   int i;
@@ -53,7 +141,7 @@ char *create_US_frame(int *frame_len, int control_bit) {
   char *buf = (char *)malloc(6 * sizeof(char));
   buf[0] = FLAG;
 
-  if (data_link.status == TRANSMITTER) {
+  if (application.app_layer_status == TRANSMITTER) {
     if (control_bit == SET || control_bit == DISC)
       buf[1] = SEND;
     else
@@ -117,14 +205,14 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
 int is_frame_UA(char *reply) {
   return (
       reply[0] == FLAG &&
-      reply[1] == ((data_link.status == TRANSMITTER) ? SEND : RECEIVE) &&
+      reply[1] == ((application.app_layer_status == TRANSMITTER) ? SEND : RECEIVE) &&
       reply[2] == UA && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
 }
 
 int is_frame_DISC(char *reply) {
   return (reply[0] == FLAG &&
           reply[1] ==
-              ((data_link.status == TRANSMITTER) ? RECEIVE : SEND) &&
+              ((application.app_layer_status == TRANSMITTER) ? RECEIVE : SEND) &&
           reply[2] == DISC && reply[3] == (reply[1] ^ reply[2]) &&
           reply[4] == FLAG);
 }
@@ -169,7 +257,7 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
 int is_frame_RR(char *reply) {
   return (
       reply[0] == FLAG &&
-      reply[1] == ((data_link.status == TRANSMITTER) ? SEND : RECEIVE) &&
+      reply[1] == ((application.app_layer_status == TRANSMITTER) ? SEND : RECEIVE) &&
       reply[2] == RR && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
 }
 

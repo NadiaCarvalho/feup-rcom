@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
      Open serial port device for reading and writing and not as controlling tty
      because we don't want to get killed if linenoise sends CTRL-C.
    */
-  fd = ll_open(argv[1], &oldtio, TRANSMITTER);
+  fd = set_up_connection(argv[1], &oldtio, TRANSMITTER);
 
   if(fd < 0) {
     printf("Error opening file descriptor. Exiting...\n");
