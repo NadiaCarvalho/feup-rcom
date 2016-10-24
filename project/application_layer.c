@@ -12,39 +12,17 @@ int ll_open(char *terminal, struct termios *old_port_settings, Status status) {
   application.status = status;
 
   int fd = open(terminal, O_RDWR | O_NOCTTY);
+  applicaton.file_descriptor = fd;
 
-  if (fd < 0) {
+  if (applicaton.file_descriptor < 0) {
     printf("Error opening terminal '%s'\n", terminal);
     return -1;
   }
 
-  applicaton.file_descriptor = fd;
-
-  if (tcgetattr(fd, old_port_settings) == -1) { /* save current port settings */
-    printf("Error getting port settings.\n");
-    close(fd);
-    return -1;
-  }
 
   struct termios new_port_settings;
-
-  bzero(&new_port_settings, sizeof(new_port_settings));
-  new_port_settings.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
-  new_port_settings.c_iflag = IGNPAR;
-  new_port_settings.c_oflag = 0;
-
-  /* set input mode (non-canonical, no echo,...) */
-  new_port_settings.c_lflag = 0;
-
-  new_port_settings.c_cc[VTIME] =
-      0; /* inter-character timer unused in 1/10th of a second*/
-  new_port_settings.c_cc[VMIN] = 1; /* blocking read until x chars received */
-
-  tcflush(fd, TCIOFLUSH);
-
-  if (tcsetattr(fd, TCSANOW, &new_port_settings) == -1) {
-    printf("Error setting port settings.\n");
-    close(fd);
+  if(set_terminal_attributes(old_port_settings, &new_port_settings) != 0){
+    printf("Error setting terminal attributes\n");
     return -1;
   }
 
@@ -158,5 +136,37 @@ int ll_close(int fd, struct termios *old_port_settings) {
   }
 
   printf("Connection succesfully closed.\n");
+  return 0;
+}
+
+int set_terminal_attributes(struct termios *old_port_settings, struct termios *new_port_settings){
+
+  if (tcgetattr(fd, old_port_settings) == -1) { /* save current port settings */
+    printf("Error getting port settings.\n");
+    close(fd);
+    return -1;
+  }
+
+
+  bzero(new_port_settings, sizeof(*new_port_settings));
+  new_port_settings->c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+  new_port_settings->c_iflag = IGNPAR;
+  new_port_settings->c_oflag = 0;
+
+  /* set input mode (non-canonical, no echo,...) */
+  new_port_settings->c_lflag = 0;
+
+  new_port_settings->c_cc[VTIME] =
+      0; /* inter-character timer unused in 1/10th of a second*/
+  new_port_settings->c_cc[VMIN] = 1; /* blocking read until x chars received */
+
+  tcflush(fd, TCIOFLUSH);
+
+  if (tcsetattr(fd, TCSANOW, new_port_settings) == -1) {
+    printf("Error setting port settings.\n");
+    close(fd);
+    return -1;
+  }
+
   return 0;
 }

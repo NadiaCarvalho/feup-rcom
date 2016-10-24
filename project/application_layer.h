@@ -36,3 +36,9 @@ int ll_read(int fd, char* msg, int* len);
 * Returns -1 on error.
 */
 int ll_close(int fd, struct termios *old_port_settings);
+
+/**
+* Change the terminal settings
+* return -1 on error
+*/
+int set_terminal_attributes(struct termios *old_port_settings);
