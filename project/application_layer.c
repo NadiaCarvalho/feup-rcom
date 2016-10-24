@@ -63,10 +63,55 @@ int ll_open(char *terminal, struct termios *old_port_settings, Status status) {
   return fd;
 }
 
+int is_frame_RR(char *reply) {
+  return (
+      reply[0] == FLAG &&
+      reply[1] == ((data_link_layer.status == TRANSMITTER) ? SEND : RECEIVE) &&
+      reply[2] == RR && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
+}
 
-int ll_write(int fd, char *msg, int len) {
+char *create_I_frame(int *frame_len, char *packet, int packet_len) {
+  char *frame =
+      (char *)malloc((6 + packet_len) * sizeof(char)); // Lacks byte stuffing
+  *frame_len = 6 + packet_len;
+
+  frame[0] = FLAG;
+  frame[1] = SEND;
+  frame[2] = 0 | (1 << 6);
+  frame[3] = 0xFF;
+  memcpy(frame + 4, packet, packet_len);
+  frame[packet_len + 4] = 0xFF;
+  frame[packet_len + 5] = FLAG;
+
+  return frame;
+}
+
+int write_to_tty(int fd, char *buf, int buf_length) {
+  int total_written_chars = 0;
+  int written_chars = 0;
+
+  while (total_written_chars < buf_length) {
+    written_chars = write(fd, buf, buf_length);
+    if (written_chars == 0)
+      break;
+    total_written_chars += written_chars;
+  }
+
+  return 0;
+}
+
+int ll_write(int fd, char *packet, int packet_len) {
   // Writes and checks for validity
   // Using send_frame
+  int frame_len;
+  char *frame = create_I_frame(&frame_len, packet, packet_len);
+  // send_frame()
+  // write_to_tty(fd, frame, frame_len);
+
+  if (send_frame(fd, frame, frame_len, is_frame_RR) == 0)
+    printf("Received RR.\n");
+  else
+    printf("Didn't receive RR.\n");
 
   return 0;
 }

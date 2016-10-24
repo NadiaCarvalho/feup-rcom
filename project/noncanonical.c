@@ -1,6 +1,7 @@
 /*Non-Canonical Input Processing*/
 
 #include "data_link_layer.h"
+#include "application_layer.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
