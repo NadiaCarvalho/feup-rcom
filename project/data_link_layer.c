@@ -234,7 +234,7 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
   while (connection_timeouts < ACCEPTABLE_TIMEOUTS) {
     write_to_tty(fd, frame, len);
     alarm(3);
-
+    printf("Reading..\n");
     if (read_from_tty(fd, reply, &reply_len) ==
         0) { // If the read() was successful
       if (is_reply_valid(reply))
