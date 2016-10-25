@@ -1,7 +1,7 @@
 /*Non-Canonical Input Processing*/
 
-#include "data_link_layer.h"
 #include "application_layer.h"
+#include "data_link_layer.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,9 +14,6 @@
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 
 int main(int argc, char **argv) {
-  int fd;
-  struct termios oldtio;
-
   if ((argc < 2) || ((strcmp("/dev/ttyS0", argv[1]) != 0) &&
                      (strcmp("/dev/ttyS1", argv[1]) != 0))) {
     printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
@@ -27,13 +24,19 @@ int main(int argc, char **argv) {
      Open serial port device for reading and writing and not as controlling tty
      because we don't want to get killed if linenoise sends CTRL-C.
    */
-  fd = set_up_connection(argv[1], &oldtio, RECEIVER);
+  int fd = set_up_connection(argv[1], RECEIVER);
 
   if (fd < 0) {
     printf("Error opening file descriptor. Exiting...\n");
     return -1;
   }
 
-  ll_close(fd, &oldtio);
+  char data[256];
+  int length;
+  receive_data(data, &length);
+
+  printf("%s\n", data);
+
+  ll_close(fd);
   return 0;
 }

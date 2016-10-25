@@ -62,7 +62,7 @@ int ll_read(int fd, char *msg, int *len);
 * Closes the given fd and sets the port settings.
 * Returns -1 on error.
 */
-int ll_close(int fd, struct termios *old_port_settings);
+int ll_close(int fd);
 
 // Debug functions
 int write_to_tty(int fd, char *buf, int buf_length);
@@ -75,5 +75,6 @@ char *create_US_frame(int *frame_len, int control_bit);
 int is_frame_UA(char *reply);
 int is_frame_RR(char *reply);
 int is_frame_DISC(char *reply);
+void print_as_hexadecimal(char *msg, int msg_len);
 
 #endif

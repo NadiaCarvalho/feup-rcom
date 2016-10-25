@@ -52,6 +52,18 @@ int set_terminal_attributes(int fd) {
   return 0;
 }
 
+// Checks are not full. Need to check BCC of the packet.
+int is_I_frame_valid(char *frame, int frame_len, int seq_num) {
+  if (frame_len < 6)
+    return 0;
+
+  if (frame[0] != FLAG || frame[1] != SEND || frame[2] != seq_num ||
+      frame[3] != (frame[1] ^ frame[2]))
+    return 0;
+
+  return 1;
+}
+
 /**
  * TODO:
  * if stat == TRANSMITTER -> send SET, receive UA
@@ -126,14 +138,33 @@ int ll_write(int fd, char *packet, int packet_len) {
   return 0;
 }
 
-int ll_read(int fd, char *msg, int *len) {
+int ll_read(int fd, char *packet, int *len) {
   // Reads and checks for validity
   //
+  static int seq_num = 0;
+
+  char frame[256];
+  int frame_len;
+  read_from_tty(fd, frame, &frame_len);
+
+  /*if (!is_I_frame_valid(frame, frame_len, seq_num)) {
+    return -1;
+  }*/
+
+  // destuff and parse packet
+
+  *len = frame_len - 6;
+  memcpy(packet, frame + 4, *len);
+  print_as_hexadecimal(packet, *len);
+  printf("\n");
+  int reply_len;
+  char *reply = create_US_frame(&reply_len, RR);
+  write_to_tty(fd, reply, reply_len);
 
   return 0;
 }
 
-int ll_close(int fd, struct termios *old_port_settings) {
+int ll_close(int fd) {
   char *frame;
   int frame_len = 0;
 
@@ -155,7 +186,7 @@ int ll_close(int fd, struct termios *old_port_settings) {
   // Wait for DISC
   // Send UA
 
-  if (tcsetattr(fd, TCSANOW, old_port_settings) == -1)
+  if (tcsetattr(fd, TCSANOW, &old_port_settings) == -1)
     printf("Error settings old port settings.\n");
 
   if (close(fd)) {
@@ -205,9 +236,8 @@ int write_to_tty(int fd, char *buf, int buf_length) {
   int written_chars = 0;
 
   while (total_written_chars < buf_length) {
-    printf("Escrevendo...\n");
     written_chars = write(fd, buf, buf_length);
-    printf("Written chars: %d", written_chars);
+
     if (written_chars <= 0)
       return -1;
     total_written_chars += written_chars;
@@ -225,9 +255,6 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
   STOP = 0;
   while (!STOP) {                   /* loop for input */
     read_chars = read(fd, &buf, 1); /* returns after x chars have been input */
-    printf("Read chars: %d", read_chars);
-    if (read_chars)
-      perror(strerror(errno));
 
     if (read_chars > 0) { // If characters were read
       if (buf == 0x7E) {
@@ -245,7 +272,6 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
         return 0;
     }
   }
-  print_as_hexadecimal(frame, *frame_len);
 
   return 0;
 }
@@ -282,13 +308,13 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
 
   while (connection_timeouts < ACCEPTABLE_TIMEOUTS) {
     if (write_to_tty(fd, frame, len)) {
-      printf("Problem writing.\n");
       if (sigaction(SIGALRM, &old_action, NULL) == -1)
         printf("Error setting SIGALRM handler to original.\n");
       return -1;
     }
-    // alarm(3);
-    printf("Reading..\n");
+
+    alarm(3);
+
     if (read_from_tty(fd, reply, &reply_len) ==
         0) { // If the read() was successful
       if (is_reply_valid(reply))
