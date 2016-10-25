@@ -42,7 +42,7 @@ link_layer data_link;
 * Returns the according file descriptor on success,
 * returning -1 otherwise.
 */
-int ll_open(int port, status stat);
+int ll_open(int port, status stat, struct termios *old_port_settings);
 
 /**
 * Writes the given msg with len length to the
@@ -75,5 +75,11 @@ char *create_US_frame(int *frame_len, int control_bit);
 int is_frame_UA(char *reply);
 int is_frame_RR(char *reply);
 int is_frame_DISC(char *reply);
+
+/**
+* Change the terminal settings
+* return -1 on error
+*/
+int set_terminal_attributes(int fd, struct termios *old_port_settings) ;
 
 #endif

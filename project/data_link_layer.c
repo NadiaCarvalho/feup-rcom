@@ -12,17 +12,16 @@
 #define ACCEPTABLE_TIMEOUTS 3
 
 volatile int STOP = 0;
-struct termios old_port_settings;
 int connection_timeouts = 0;
 
 /**
 * Change the terminal settings
 * return -1 on error
 */
-int set_terminal_attributes(int fd) {
+int set_terminal_attributes(int fd, struct termios *old_port_settings) {
   struct termios new_port_settings;
 
-  if (tcgetattr(fd, &old_port_settings) ==
+  if (tcgetattr(fd, old_port_settings) ==
       -1) { /* save current port settings */
     printf("Error getting port settings.\n");
     close(fd);
@@ -57,7 +56,7 @@ int set_terminal_attributes(int fd) {
  * if stat == TRANSMITTER -> send SET, receive UA
  * reverse if stat == RECEIVE
  */
-int ll_open(int port, status stat) {
+int ll_open(int port, status stat, struct termios *old_port_settings) {
   switch (port) {
   case COM1:
     strcpy(data_link.port, COM1_PORT);
@@ -87,7 +86,7 @@ int ll_open(int port, status stat) {
   }
   int frame_len;
 
-  set_terminal_attributes(fd);
+  set_terminal_attributes(fd, old_port_settings);
 
   if (stat == TRANSMITTER) {
     char *frame = create_US_frame(&frame_len, SET);

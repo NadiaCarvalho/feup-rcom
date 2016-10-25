@@ -1,6 +1,6 @@
 #include "data_link_layer.h"
 
-int set_up_connection(char *terminal, struct termios *oldtio, status stat) {
+int set_up_connection(char *terminal, struct termios *old_port_settings, status stat) {
   if (stat != TRANSMITTER && stat != RECEIVER) {
     printf("application_layer :: set_up_connection() :: Invalid status.\n");
     return -1;
@@ -18,7 +18,7 @@ int set_up_connection(char *terminal, struct termios *oldtio, status stat) {
   }
 
   if ((application.file_descriptor =
-           ll_open(port, application.app_layer_status)) < 0) {
+           ll_open(port, application.app_layer_status, old_port_settings)) < 0) {
     printf("application_layer :: set_up_connection() :: ll_open failed\n");
     return -1;
   }

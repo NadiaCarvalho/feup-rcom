@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <termios.h>
 
 typedef enum { TRANSMITTER, RECEIVER } status;
 
@@ -19,6 +20,6 @@ app_layer application;
  * calls ll_open
  * returns -1 on error
  */
-int set_up_connection(char* terminal, struct termios *oldtio, status stat);
+int set_up_connection(char* terminal, struct termios *old_port_settings, status stat);
 
 #endif
