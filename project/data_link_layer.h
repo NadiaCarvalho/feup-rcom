@@ -5,6 +5,8 @@
 #include <termios.h>
 
 #define FLAG 0x7E
+#define ESCAPE 0x7D
+#define STUFFING_BYTE 0x20
 
 #define SEND 0x03
 #define RECEIVE 0x01
