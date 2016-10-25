@@ -13,11 +13,6 @@ typedef struct {
 } app_layer;
 
 app_layer application;
-/**
-* Change the terminal settings
-* return -1 on error
-*/
-int set_terminal_attributes(struct termios *old_port_settings, struct termios *new_port_settings);
 
 /**
  * Establishes a connection between the receiver and the transmitter

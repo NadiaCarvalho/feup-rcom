@@ -12,8 +12,45 @@
 #define ACCEPTABLE_TIMEOUTS 3
 
 volatile int STOP = 0;
+struct termios old_port_settings;
 int connection_timeouts = 0;
 
+/**
+* Change the terminal settings
+* return -1 on error
+*/
+int set_terminal_attributes(int fd) {
+  struct termios new_port_settings;
+
+  if (tcgetattr(fd, &old_port_settings) ==
+      -1) { /* save current port settings */
+    printf("Error getting port settings.\n");
+    close(fd);
+    return -1;
+  }
+
+  bzero(&new_port_settings, sizeof(new_port_settings));
+  new_port_settings.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+  new_port_settings.c_iflag = IGNPAR;
+  new_port_settings.c_oflag = 0;
+
+  /* set input mode (non-canonical, no echo,...) */
+  new_port_settings.c_lflag = 0;
+
+  new_port_settings.c_cc[VTIME] =
+      0; /* inter-character timer unused in 1/10th of a second*/
+  new_port_settings.c_cc[VMIN] = 1; /* blocking read until x chars received */
+
+  tcflush(fd, TCIOFLUSH);
+
+  if (tcsetattr(fd, TCSANOW, &new_port_settings) == -1) {
+    printf("Error setting port settings.\n");
+    close(fd);
+    return -1;
+  }
+
+  return 0;
+}
 
 /**
  * TODO:
@@ -21,18 +58,18 @@ int connection_timeouts = 0;
  * reverse if stat == RECEIVE
  */
 int ll_open(int port, status stat) {
-  switch (port){
-    case COM1:
-      strcpy(data_link.port, COM1_PORT);
-      break;
+  switch (port) {
+  case COM1:
+    strcpy(data_link.port, COM1_PORT);
+    break;
 
-    case COM2:
-      strcpy(data_link.port, COM2_PORT);
-      break;
+  case COM2:
+    strcpy(data_link.port, COM2_PORT);
+    break;
 
-    default:
-      printf("data_link_layer :: ll_open() :: invalid port!\n");
-      return -1;
+  default:
+    printf("data_link_layer :: ll_open() :: invalid port!\n");
+    return -1;
   }
 
   if (stat != TRANSMITTER && stat != RECEIVER) {
@@ -43,12 +80,14 @@ int ll_open(int port, status stat) {
   /**
    * Opening the serial port
    */
-  int fd; //value to be returned
+  int fd; // value to be returned
   if ((fd = open(data_link.port, O_RDWR | O_NOCTTY)) < 0) {
     printf("Error opening terminal '%s'\n", data_link.port);
     return -1;
   }
   int frame_len;
+
+  set_terminal_attributes(fd);
 
   if (stat == TRANSMITTER) {
     char *frame = create_US_frame(&frame_len, SET);
@@ -65,7 +104,8 @@ int ll_open(int port, status stat) {
     write_to_tty(fd, frame, frame_len);
   }
 
-  printf("data_link_layer :: ll_open() :: connection succesfully established.\n");
+  printf(
+      "data_link_layer :: ll_open() :: connection succesfully established.\n");
 
   return fd;
 }
@@ -78,7 +118,7 @@ int ll_write(int fd, char *packet, int packet_len) {
 
   // send_frame()
   // write_to_tty(fd, frame, frame_len);
-    if (send_frame(fd, frame, frame_len, is_frame_RR) == 0)
+  if (send_frame(fd, frame, frame_len, is_frame_RR) == 0)
     printf("Received RR.\n");
   else
     printf("Didn't receive RR.\n");
@@ -127,7 +167,6 @@ int ll_close(int fd, struct termios *old_port_settings) {
   return 0;
 }
 
-
 void print_as_hexadecimal(char *msg, int msg_len) {
   int i;
   for (i = 0; i < msg_len; i++)
@@ -166,10 +205,10 @@ int write_to_tty(int fd, char *buf, int buf_length) {
   int written_chars = 0;
 
   while (total_written_chars < buf_length) {
+    printf("Escrevendo...\n");
     written_chars = write(fd, buf, buf_length);
-    if (written_chars == 0)
-      break;
-    else if(written_chars < 0)
+    printf("Written chars: %d", written_chars);
+    if (written_chars <= 0)
       return -1;
     total_written_chars += written_chars;
   }
@@ -184,13 +223,16 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
   int initial_flag = 0;
 
   STOP = 0;
-  while (!STOP) {                    /* loop for input */
+  while (!STOP) {                   /* loop for input */
     read_chars = read(fd, &buf, 1); /* returns after x chars have been input */
+    printf("Read chars: %d", read_chars);
+    if (read_chars)
+      perror(strerror(errno));
 
     if (read_chars > 0) { // If characters were read
-      if (buf == 0x7E){
+      if (buf == 0x7E) {
         initial_flag = (initial_flag + 1) % 2;
-        if(!initial_flag)
+        if (!initial_flag)
           STOP = 1;
       }
 
@@ -211,14 +253,15 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
 int is_frame_UA(char *reply) {
   return (
       reply[0] == FLAG &&
-      reply[1] == ((application.app_layer_status == TRANSMITTER) ? SEND : RECEIVE) &&
+      reply[1] ==
+          ((application.app_layer_status == TRANSMITTER) ? SEND : RECEIVE) &&
       reply[2] == UA && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
 }
 
 int is_frame_DISC(char *reply) {
   return (reply[0] == FLAG &&
-          reply[1] ==
-              ((application.app_layer_status == TRANSMITTER) ? RECEIVE : SEND) &&
+          reply[1] == ((application.app_layer_status == TRANSMITTER) ? RECEIVE
+                                                                     : SEND) &&
           reply[2] == DISC && reply[3] == (reply[1] ^ reply[2]) &&
           reply[4] == FLAG);
 }
@@ -238,20 +281,27 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
     printf("Error installing new SIGALRM handler.\n");
 
   while (connection_timeouts < ACCEPTABLE_TIMEOUTS) {
-    write_to_tty(fd, frame, len);
-    alarm(3);
+    if (write_to_tty(fd, frame, len)) {
+      printf("Problem writing.\n");
+      if (sigaction(SIGALRM, &old_action, NULL) == -1)
+        printf("Error setting SIGALRM handler to original.\n");
+      return -1;
+    }
+    // alarm(3);
     printf("Reading..\n");
     if (read_from_tty(fd, reply, &reply_len) ==
         0) { // If the read() was successful
       if (is_reply_valid(reply))
         break;
+    } else {
+      printf("Error reading.\n");
+      if (sigaction(SIGALRM, &old_action, NULL) == -1)
+        printf("Error setting SIGALRM handler to original.\n");
+      return -1;
     }
     printf("Connection failed. Retrying %d out of %d...\n", connection_timeouts,
            ACCEPTABLE_TIMEOUTS);
   }
-
-  if (sigaction(SIGALRM, &old_action, NULL) == -1)
-    printf("Error setting SIGALRM handler to original.\n");
 
   if (connection_timeouts == ACCEPTABLE_TIMEOUTS)
     return -1;
@@ -259,11 +309,11 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
     return 0;
 }
 
-
 int is_frame_RR(char *reply) {
   return (
       reply[0] == FLAG &&
-      reply[1] == ((application.app_layer_status == TRANSMITTER) ? SEND : RECEIVE) &&
+      reply[1] ==
+          ((application.app_layer_status == TRANSMITTER) ? SEND : RECEIVE) &&
       reply[2] == RR && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
 }
 

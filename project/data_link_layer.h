@@ -1,8 +1,8 @@
 #ifndef DATA_LINK_LAYER_H
 #define DATA_LINK_LAYER_H
 
-#include <termios.h>
 #include "application_layer.h"
+#include <termios.h>
 
 #define FLAG 0x7E
 
@@ -25,11 +25,11 @@
 #define US_FRAME_LENGTH 5
 
 typedef struct {
-  char port[20];              /* Serial port device e.g. /dev/ttyS0 */
+  char port[20]; /* Serial port device e.g. /dev/ttyS0 */
   int baud_rate;
-  unsigned int sequence_num;  /* Frame sequence number (0 or 1) */
-  unsigned int timeout;       /* Time to timeout e.g. 1 second */
-  unsigned int num_retries;   /* Maximum number of retries */
+  unsigned int sequence_num; /* Frame sequence number (0 or 1) */
+  unsigned int timeout;      /* Time to timeout e.g. 1 second */
+  unsigned int num_retries;  /* Maximum number of retries */
 } link_layer;
 
 link_layer data_link;
@@ -49,14 +49,14 @@ int ll_open(int port, status stat);
 * given fd.
 * Returns -1 on error.
 */
-int ll_write(int fd, char* msg, int len);
+int ll_write(int fd, char *msg, int len);
 
 /**
 * Reads the message from fd and places it on
 * msg, updating len accordingly.
 * Returns -1 on error.
 */
-int ll_read(int fd, char* msg, int* len);
+int ll_read(int fd, char *msg, int *len);
 
 /**
 * Closes the given fd and sets the port settings.
@@ -64,13 +64,10 @@ int ll_read(int fd, char* msg, int* len);
 */
 int ll_close(int fd, struct termios *old_port_settings);
 
-
-//Debug functions
+// Debug functions
 int write_to_tty(int fd, char *buf, int buf_length);
 int read_from_tty(int fd, char *frame, int *frame_len);
-int send_frame(int fd, char *frame, int len,
-               int (*is_reply_valid)(char *));
-
+int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *));
 
 char *create_I_frame(int *frame_len, char *packet, int packet_len);
 
