@@ -80,6 +80,16 @@ int is_frame_DISC(char *reply);
 * Change the terminal settings
 * return -1 on error
 */
-int set_terminal_attributes(int fd, struct termios *old_port_settings) ;
+int set_terminal_attributes(int fd, struct termios *old_port_settings);
+
+/**
+* Stuffing the frame given.
+*/
+int stuffing(char *frame,int i,unsigned char type);
+
+/**
+* Destuffing the frame given.
+*/
+int destuffing(char* initialFrame,char *finalFrame,int initialFrameLenght);
 
 #endif

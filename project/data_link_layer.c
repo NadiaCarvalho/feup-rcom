@@ -331,3 +331,39 @@ char *create_I_frame(int *frame_len, char *packet, int packet_len) {
 
   return frame;
 }
+
+int stuffing(char *frame,int i,unsigned char bcc){
+
+  if(bcc==FLAG || bcc==ESCAPE)
+  {
+    frame[i]=ESCAPE;
+    frame[i]=STUFFING_BYTE^bcc;
+
+    return 1;
+  }
+
+  return 0;
+
+}
+
+int destuffing(char* initialFrame,char *finalFrame,int initialFrameLenght){
+
+  int finalFrameLength=0;
+
+  for(int i=0;i<initialFrameLenght;i++)
+  {
+    if(initialFrame[i]==ESCAPE)
+    {
+      finalFrame[finalFrameLength]=initialFrame[i]^STUFFING_BYTE;
+    }
+    else
+    {
+      finalFrame[finalFrameLength]=initialFrame[i];
+    }
+
+    finalFrameLength++;
+  }
+
+  return finalFrameLength;
+
+}
