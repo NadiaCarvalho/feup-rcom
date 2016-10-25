@@ -138,7 +138,7 @@ void print_as_hexadecimal(char *msg, int msg_len) {
 void timeout(int signum) { connection_timeouts++; }
 
 char *create_US_frame(int *frame_len, int control_bit) {
-  char *buf = (char *)malloc(6 * sizeof(char));
+  char *buf = (char *)malloc(US_FRAME_LENGTH * sizeof(char));
   buf[0] = FLAG;
 
   if (application.app_layer_status == TRANSMITTER) {
@@ -156,8 +156,7 @@ char *create_US_frame(int *frame_len, int control_bit) {
   buf[2] = control_bit;
   buf[3] = buf[1] ^ buf[2];
   buf[4] = FLAG;
-  buf[5] = 0;
-  *frame_len = 6;
+  *frame_len = US_FRAME_LENGTH;
 
   return buf;
 }
@@ -170,6 +169,8 @@ int write_to_tty(int fd, char *buf, int buf_length) {
     written_chars = write(fd, buf, buf_length);
     if (written_chars == 0)
       break;
+    else if(written_chars < 0)
+      return -1;
     total_written_chars += written_chars;
   }
 
@@ -178,19 +179,23 @@ int write_to_tty(int fd, char *buf, int buf_length) {
 
 int read_from_tty(int fd, char *frame, int *frame_len) {
   int read_chars = 0;
-  char buf[255];
+  char buf;
   *frame_len = 0;
+  int initial_flag = 0;
 
   STOP = 0;
   while (!STOP) {                    /* loop for input */
-    read_chars = read(fd, buf, 255); /* returns after x chars have been input */
+    read_chars = read(fd, &buf, 1); /* returns after x chars have been input */
 
     if (read_chars > 0) { // If characters were read
-      if (buf[read_chars - 1] == 0)
-        STOP = 1;
+      if (buf == 0x7E){
+        initial_flag = (initial_flag + 1) % 2;
+        if(!initial_flag)
+          STOP = 1;
+      }
 
-      memcpy(frame + (*frame_len), buf, read_chars);
-      (*frame_len) += read_chars;
+      frame[*frame_len] = buf;
+      (*frame_len)++;
     } else {              // If no characters were read or there was an error
       if (errno == EINTR) // If the read() command was interrupted
         return -1;
@@ -198,6 +203,7 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
         return 0;
     }
   }
+  print_as_hexadecimal(frame, *frame_len);
 
   return 0;
 }

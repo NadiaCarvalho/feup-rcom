@@ -1,4 +1,3 @@
-#include "application_layer.h"
 #include "data_link_layer.h"
 
 int set_up_connection(char *terminal, struct termios *oldtio, status stat) {

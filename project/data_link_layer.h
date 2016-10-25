@@ -22,6 +22,8 @@
 #define COM1_PORT "/dev/ttyS0"
 #define COM2_PORT "/dev/ttyS1"
 
+#define US_FRAME_LENGTH 5
+
 typedef struct {
   char port[20];              /* Serial port device e.g. /dev/ttyS0 */
   int baud_rate;
