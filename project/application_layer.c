@@ -1,4 +1,4 @@
-#include "data_link_layer.h"
+#include "application_layer.h"
 
 #define PACKET_START 2
 #define PACKET_END 3
@@ -20,8 +20,8 @@ int set_up_connection(char *terminal, status stat) {
     printf("application_layer :: set_up_connection() :: Invalid terminal\n");
   }
 
-  if ((application.file_descriptor = ll_open(port, application.app_layer_status)) < 0)
-  {
+  if ((application.file_descriptor =
+           ll_open(port, application.app_layer_status)) < 0) {
     printf("application_layer :: set_up_connection() :: ll_open failed\n");
     return -1;
   }
@@ -37,37 +37,31 @@ int receive_data(char *data, int *length) {
 
   int packet_len;
 
-  if(ll_read(application.file_descriptor, packet, &packet_len)!=0)
-  {
+  if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
     printf("Error ll_read() in function receive_data().\n");
     return -1;
   }
 
-  printf("First packet: \n");
-
-  print_as_hexadecimal(packet, packet_len);
-
-  while (packet[0] != (unsigned char) PACKET_START)
-  {
+  while (packet[0] != (unsigned char)PACKET_START) {
     ll_read(application.file_descriptor, packet, &packet_len);
   }
 
-  printf("received start\n");
+  if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
+    printf("Error ll_read() in function receive_data().\n");
+    return -1;
+  }
 
-  while (packet[0] != (unsigned char) PACKET_END)
-  {
-    if(ll_read(application.file_descriptor, packet, &packet_len)!=0)
-    {
-      printf("Error ll_read() in function receive_data().\n");
-      return -1;
-    }
+  while (packet[0] != (unsigned char)PACKET_END) {
     // Lacks sequence number.
     int data_len = packet[2] * 256 + packet[3];
     memcpy(data + (*length), packet + 4, data_len);
     *length += data_len;
-  }
 
-  printf("received end\n");
+    if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
+      printf("Error ll_read() in function receive_data().\n");
+      return -1;
+    }
+  }
 
   return 0;
 }

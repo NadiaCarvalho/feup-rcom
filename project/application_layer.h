@@ -1,11 +1,11 @@
 #ifndef APPLICATION_LAYER_H
 #define APPLICATION_LAYER_H
 
+#include "data_link_layer.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-
-typedef enum { TRANSMITTER, RECEIVER } status;
+#include <termios.h>
 
 typedef struct {
   int file_descriptor;     /* Serial port file descriptor */

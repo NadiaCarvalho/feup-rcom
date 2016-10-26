@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
   }
 
   char msg[255];
-  strcpy(msg, "Ola, sou o bernardo");
+  strcpy(msg, "Ola, o catotas e um gajo porreirinho.");
   char msg_len = strlen(msg);
   char start_packet[] = {2, 0, 1, msg_len};
   char end_packet[] = {3};

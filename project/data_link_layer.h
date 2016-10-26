@@ -1,10 +1,9 @@
 #ifndef DATA_LINK_LAYER_H
 #define DATA_LINK_LAYER_H
 
-#include "application_layer.h"
-#include <termios.h>
-
 #define FLAG 0x7E
+#define ESCAPE 0x7D
+#define STUFFING_BYTE 0x20
 
 #define SEND 0x03
 #define RECEIVE 0x01
@@ -23,27 +22,17 @@
 #define COM2_PORT "/dev/ttyS1"
 
 #define US_FRAME_LENGTH 5
-
-typedef struct {
-  char port[20]; /* Serial port device e.g. /dev/ttyS0 */
-  int baud_rate;
-  unsigned int sequence_num; /* Frame sequence number (0 or 1) */
-  unsigned int timeout;      /* Time to timeout e.g. 1 second */
-  unsigned int num_retries;  /* Maximum number of retries */
-} link_layer;
-
-link_layer data_link;
+typedef enum { TRANSMITTER, RECEIVER } status;
 
 /**
 * Opens the terminal refered to by terminal.
-* Updates the port settings and saves the old ones in
-* old_port_settings.
+* Updates the port settings and saves the old ones to be reset.
 * Depending on status, it send a SET or UA frame.
 * Returns the according file descriptor on success,
 * returning -1 otherwise.
 */
 int ll_open(int port, status stat);
-
+void print_as_hexadecimal(char *msg, int msg_len);
 /**
 * Writes the given msg with len length to the
 * given fd.
@@ -63,18 +52,5 @@ int ll_read(int fd, char *msg, int *len);
 * Returns -1 on error.
 */
 int ll_close(int fd);
-
-// Debug functions
-int write_to_tty(int fd, char *buf, int buf_length);
-int read_from_tty(int fd, char *frame, int *frame_len);
-int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *));
-
-char *create_I_frame(int *frame_len, char *packet, int packet_len);
-
-char *create_US_frame(int *frame_len, int control_bit);
-int is_frame_UA(char *reply);
-int is_frame_RR(char *reply);
-int is_frame_DISC(char *reply);
-void print_as_hexadecimal(char *msg, int msg_len);
 
 #endif

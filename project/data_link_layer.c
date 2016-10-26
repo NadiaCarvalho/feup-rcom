@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <termios.h>
 #include <unistd.h>
 
 #define BAUDRATE B9600
@@ -15,13 +16,44 @@ volatile int STOP = 0;
 struct termios old_port_settings;
 int connection_timeouts = 0;
 
+struct {
+  char port[20]; /* Serial port device e.g. /dev/ttyS0 */
+  int baud_rate;
+  unsigned int sequence_num; /* Frame sequence number (0 or 1) */
+  unsigned int timeout;      /* Time to timeout e.g. 1 second */
+  unsigned int num_retries;  /* Maximum number of retries */
+  status stat;
+} data_link;
+
+//'Private' functions
+int write_to_tty(int fd, char *buf, int buf_length);
+int read_from_tty(int fd, char *frame, int *frame_len);
+int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *));
+char *create_I_frame(int *frame_len, char *packet, int packet_len);
+char *create_US_frame(int *frame_len, int control_bit);
+int is_frame_UA(char *reply);
+int is_frame_RR(char *reply);
+int is_frame_DISC(char *reply);
+
 /**
 * Change the terminal settings
 * return -1 on error
 */
+int set_terminal_attributes(int fd);
+/**
+* Stuffing the frame given.
+*/
+char *stuff(char *packet, int *packet_len);
+/**
+* Destuffing the frame given.
+*/
+void destuff(char *packet, char *destuffed, int *packet_len);
+
+/*
+* Definitions
+*/
+
 int set_terminal_attributes(int fd) {
-
-
   struct termios new_port_settings;
 
   if (tcgetattr(fd, &old_port_settings) == -1) { /* save current port settings */
@@ -38,7 +70,8 @@ int set_terminal_attributes(int fd) {
   /* set input mode (non-canonical, no echo,...) */
   new_port_settings.c_lflag = 0;
 
-  new_port_settings.c_cc[VTIME] = 0; /* inter-character timer unused in 1/10th of a second*/
+  new_port_settings.c_cc[VTIME] =
+      0; /* inter-character timer unused in 1/10th of a second*/
   new_port_settings.c_cc[VMIN] = 1; /* blocking read until x chars received */
 
   tcflush(fd, TCIOFLUSH);
@@ -56,10 +89,10 @@ int set_terminal_attributes(int fd) {
 int is_I_frame_valid(char *frame, int frame_len, int seq_num) {
 
   if (frame_len < 6)
-    return 0;char *create_I_frame(int *frame_len, char *packet, int packet_len) {
+    return 0;
 
-
-  if (frame[0] != FLAG || frame[1] != SEND || frame[2] != seq_num || frame[3] != (frame[1] ^ frame[2]))
+  if (frame[0] != FLAG || frame[1] != SEND || frame[2] != seq_num ||
+      frame[3] != (frame[1] ^ frame[2]))
     return 0;
 
   return 1;
@@ -94,6 +127,7 @@ int ll_open(int port, status stat) {
     return -1;
   }
 
+  data_link.stat = stat;
   /**
    * Opening the serial port
    */
@@ -102,8 +136,7 @@ int ll_open(int port, status stat) {
     return -1;
   }
 
-  if(set_terminal_attributes(fd)!=0)
-  {
+  if (set_terminal_attributes(fd) != 0) {
     printf("Error set_terminal_attributes() in function ll_open().\n");
     return -1;
   }
@@ -111,8 +144,7 @@ int ll_open(int port, status stat) {
   if (stat == TRANSMITTER) {
 
     char *frame = create_US_frame(&frame_len, SET);
-    if (send_frame(fd, frame, frame_len, is_frame_UA) == -1)
-    {
+    if (send_frame(fd, frame, frame_len, is_frame_UA) == -1) {
       printf("data_link_layer :: ll_open() :: send_frame failed\n");
       close(fd);
       return -1;
@@ -121,21 +153,20 @@ int ll_open(int port, status stat) {
   } else {
     char msg[255];
     int msg_len;
-    if(read_from_tty(fd, msg, &msg_len)==-1)
-    {
+    if (read_from_tty(fd, msg, &msg_len) == -1) {
       printf("Error read_from_tty() in function ll_open().\n");
       return -1;
     }
 
     char *frame = create_US_frame(&frame_len, UA);
-    if(write_to_tty(fd, frame, frame_len)==-1)
-    {
+    if (write_to_tty(fd, frame, frame_len) == -1) {
       printf("Error write_to_tty() in function ll_open().\n");
-      return-1;
+      return -1;
     }
   }
 
-  printf("data_link_layer :: ll_open() :: connection succesfully established.\n");
+  printf("data_link_layer :: ll_open() :: connection succesfully "
+         "established.\n");
 
   return fd;
 }
@@ -143,6 +174,9 @@ int ll_open(int port, status stat) {
 int ll_write(int fd, char *packet, int packet_len) {
   // Writes and checks for validity
   // Using send_frame
+
+  packet = stuff(packet, &packet_len);
+
   int frame_len;
   char *frame = create_I_frame(&frame_len, packet, packet_len);
 
@@ -170,42 +204,33 @@ int ll_read(int fd, char *packet, int *len) {
     return -1;
   }*/
 
-  // destuff and parse packet
-
+  // Updates the packet length.
   *len = frame_len - 6;
-  memcpy(packet, frame + 4, *len);
-
-  print_as_hexadecimal(packet, *len);
-
-  printf("\n");
+  destuff(frame + 4, packet, len);
 
   char *reply = create_US_frame(&reply_len, RR);
 
-  if(write_to_tty(fd, reply, reply_len)!=0)
-  {
+  if (write_to_tty(fd, reply, reply_len) != 0) {
     printf("Error write_to_tty() in function ll_read().\n");
     return -1;
   }
 
   return 0;
-
 }
 
 int ll_close(int fd) {
   char *frame;
   int frame_len = 0;
 
-  if (application.app_layer_status == TRANSMITTER) {
+  if (data_link.stat == TRANSMITTER) {
     frame = create_US_frame(&frame_len, DISC);
 
-    if(send_frame(fd, frame, frame_len, is_frame_DISC)!=0)
-    {
+    if (send_frame(fd, frame, frame_len, is_frame_DISC) != 0) {
       printf("Couldn't send frame on ll_close().\n");
       return -1;
     }
 
-    if(write_to_tty(fd, create_US_frame(&frame_len, UA), frame_len)!=0)
-    {
+    if (write_to_tty(fd, create_US_frame(&frame_len, UA), frame_len) != 0) {
       printf("Couldn't write to tty on ll_close()\n");
       return -1;
     }
@@ -214,8 +239,7 @@ int ll_close(int fd) {
     char msg[256];
     int msg_len = 0;
 
-    if(read_from_tty(fd, msg, &msg_len)!=0)
-    {
+    if (read_from_tty(fd, msg, &msg_len) != 0) {
       printf("Couldn't read from tty on ll_close()\n");
       return -1;
     }
@@ -223,8 +247,7 @@ int ll_close(int fd) {
     if (is_frame_DISC(msg)) {
       frame = create_US_frame(&frame_len, DISC);
 
-      if(send_frame(fd, frame, frame_len, is_frame_UA)!=0)
-      {
+      if (send_frame(fd, frame, frame_len, is_frame_UA) != 0) {
         printf("Couldn't send frame on ll_close().\n");
         return -1;
       }
@@ -262,7 +285,7 @@ char *create_US_frame(int *frame_len, int control_bit) {
   char *buf = (char *)malloc(US_FRAME_LENGTH * sizeof(char));
   buf[0] = FLAG;
 
-  if (application.app_layer_status == TRANSMITTER) {
+  if (data_link.stat == TRANSMITTER) {
     if (control_bit == SET || control_bit == DISC)
       buf[1] = SEND;
     else
@@ -290,8 +313,7 @@ int write_to_tty(int fd, char *buf, int buf_length) {
   while (total_written_chars < buf_length) {
     written_chars = write(fd, buf, buf_length);
 
-    if (written_chars <= 0)
-    {
+    if (written_chars <= 0) {
       return -1;
     }
 
@@ -309,7 +331,7 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
   int initial_flag = 0;
 
   STOP = 0;
-  while (!STOP) {                   /* loop for input */
+  while (!STOP) { /* loop for input */
 
     read_chars = read(fd, &buf, 1); /* returns after x chars have been input */
 
@@ -338,16 +360,16 @@ int is_frame_UA(char *reply) {
 
   return (
       reply[0] == FLAG &&
-      reply[1] == ((application.app_layer_status == TRANSMITTER) ? SEND : RECEIVE) &&
-      reply[2] == UA &&
-      reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
+      reply[1] ==
+          ((data_link.stat == TRANSMITTER) ? SEND : RECEIVE) &&
+      reply[2] == UA && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
 }
 
 int is_frame_DISC(char *reply) {
   return (reply[0] == FLAG &&
-          reply[1] == ((application.app_layer_status == TRANSMITTER) ? RECEIVE : SEND) &&
-          reply[2] == DISC &&
-          reply[3] == (reply[1] ^ reply[2]) &&
+          reply[1] == ((data_link.stat == TRANSMITTER) ? RECEIVE
+                                                                     : SEND) &&
+          reply[2] == DISC && reply[3] == (reply[1] ^ reply[2]) &&
           reply[4] == FLAG);
 }
 
@@ -359,7 +381,8 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
   int reply_len;
 
   new_action.sa_handler = timeout;
-  new_action.sa_flags &= !SA_RESTART; // Needed in order to block read from restarting.
+  new_action.sa_flags &=
+      !SA_RESTART; // Needed in order to block read from restarting.
 
   if (sigaction(SIGALRM, &new_action, &old_action) == -1)
     printf("Error installing new SIGALRM handler.\n");
@@ -373,7 +396,8 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
 
     alarm(3);
 
-    if (read_from_tty(fd, reply, &reply_len) == 0) { // If the read() was successful
+    if (read_from_tty(fd, reply, &reply_len) ==
+        0) { // If the read() was successful
 
       if (is_reply_valid(reply))
         break;
@@ -384,27 +408,28 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
         printf("Error setting SIGALRM handler to original.\n");
       return -1;
     }
-    printf("Connection failed. Retrying %d out of %d...\n", connection_timeouts, ACCEPTABLE_TIMEOUTS);
+    printf("Connection failed. Retrying %d out of %d...\n", connection_timeouts,
+           ACCEPTABLE_TIMEOUTS);
   }
 
   if (connection_timeouts == ACCEPTABLE_TIMEOUTS)
     return -1;
   else
     return 0;
-
 }
 
 int is_frame_RR(char *reply) {
   return (
       reply[0] == FLAG &&
       reply[1] ==
-          ((application.app_layer_status == TRANSMITTER) ? SEND : RECEIVE) &&
+          ((data_link.stat == TRANSMITTER) ? SEND : RECEIVE) &&
       reply[2] == RR && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
 }
 
 char *create_I_frame(int *frame_len, char *packet, int packet_len) {
 
-  char *frame = (char *)malloc((6 + packet_len) * sizeof(char)); // Lacks byte stuffing
+  char *frame =
+      (char *)malloc((6 + packet_len) * sizeof(char)); // Lacks byte stuffing
   *frame_len = 6 + packet_len;
 
   frame[0] = FLAG;
@@ -416,4 +441,42 @@ char *create_I_frame(int *frame_len, char *packet, int packet_len) {
   frame[packet_len + 5] = FLAG;
 
   return frame;
+}
+
+char *stuff(char *packet, int *packet_len) {
+  // TODO: Variable size.
+  char* stuffed = (char*) malloc(((*packet_len) + 255) * sizeof(char));
+
+  int packet_iterator;
+  int stuff_iterator = 0;
+
+  for (packet_iterator = 0; packet_iterator < *packet_len; packet_iterator++) {
+
+    if (packet[packet_iterator] == ESCAPE || packet[packet_iterator] == FLAG) {
+
+      stuffed[stuff_iterator] = ESCAPE;
+      stuffed[++stuff_iterator] = packet[packet_iterator] ^ STUFFING_BYTE;
+    } else
+      stuffed[stuff_iterator] = packet[packet_iterator];
+
+    stuff_iterator++;
+  }
+
+  *packet_len = stuff_iterator;
+  return stuffed;
+}
+
+void destuff(char *packet, char *destuffed, int *packet_len) {
+  int destuff_iterator = 0;
+
+  for (int i = 0; i < *packet_len; i++) {
+    if (packet[i] == ESCAPE) {
+      destuffed[destuff_iterator] = packet[++i] ^ STUFFING_BYTE;
+    } else
+      destuffed[destuff_iterator] = packet[i];
+
+    destuff_iterator++;
+  }
+
+  *packet_len = destuff_iterator;
 }
