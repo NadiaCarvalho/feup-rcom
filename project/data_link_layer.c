@@ -211,7 +211,7 @@ int ll_read(int fd, char *packet, int *len) {
   int read_succesful = 0;
   while (!read_succesful) {
     read_from_tty(fd, frame, &frame_len);
-
+    //FIXME: Check if frame is duplicated
     if (!is_I_frame_valid(frame, frame_len)) {
       reply = create_US_frame(&reply_len, REJ);
     } else {
