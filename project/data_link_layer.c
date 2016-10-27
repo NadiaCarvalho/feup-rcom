@@ -30,11 +30,12 @@ struct {
 int write_to_tty(int fd, char *buf, int buf_length);
 int read_from_tty(int fd, char *frame, int *frame_len);
 int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *));
-char *create_I_frame(int *frame_len, char *packet, int packet_len);
+char *create_I_frame(int *frame_len, char *packet, int packet_len, int bcc2);
 char *create_US_frame(int *frame_len, int control_byte);
 int is_frame_UA(char *reply);
 int is_frame_RR(char *reply);
 int is_frame_DISC(char *reply);
+int is_I_frame_valid(char *frame, int frame_len);
 void timeout(int signum);
 
 /**
@@ -89,16 +90,15 @@ int set_terminal_attributes(int fd) {
 }
 
 // Checks are not full. Need to check BCC of the packet.
-int is_I_frame_valid(char *frame, int frame_len, int seq_num) {
+int is_I_frame_valid(char *frame, int frame_len) {
+  static int s = 1;
+  s = !s;
 
   if (frame_len < 6)
     return 0;
 
-  if (frame[0] != FLAG || frame[1] != SEND || frame[2] != seq_num ||
-      frame[3] != (frame[1] ^ frame[2]))
-    return 0;
-
-  return 1;
+  return frame[0] == FLAG && frame[1] == SEND && frame[2] == s << 6 &&
+         frame[3] == (frame[1] ^ frame[2]);
 }
 
 /**
@@ -185,11 +185,16 @@ int ll_open(int port, status stat) {
 int ll_write(int fd, char *packet, int packet_len) {
   // Writes and checks for validity
   // Using send_frame
+  int bcc2 = 0;
 
+  int i;
+  for (i = 0; i < packet_len; i++)
+    bcc2 ^= packet[i];
+  // FIXME: Stuff bcc2 if needed
   packet = stuff(packet, &packet_len);
 
   int frame_len;
-  char *frame = create_I_frame(&frame_len, packet, packet_len);
+  char *frame = create_I_frame(&frame_len, packet, packet_len, bcc2);
   send_frame(fd, frame, frame_len, is_frame_RR);
 
   return 0;
@@ -198,28 +203,39 @@ int ll_write(int fd, char *packet, int packet_len) {
 int ll_read(int fd, char *packet, int *len) {
 
   // Reads and checks for validity
+  char *reply;
   int reply_len;
-  static int seq_num = 0;
 
   char frame[256];
   int frame_len;
-  read_from_tty(fd, frame, &frame_len);
+  int read_succesful = 0;
+  while (!read_succesful) {
+    read_from_tty(fd, frame, &frame_len);
 
-  /*if (!is_I_frame_valid(frame, frame_len, seq_num)) {
-    return -1;
-  }*/
+    if (!is_I_frame_valid(frame, frame_len)) {
+      reply = create_US_frame(&reply_len, REJ);
+    } else {
+      // Updates the packet length.
+      *len = frame_len - 6;
+      destuff(frame + 4, packet, len);
 
-  // Updates the packet length.
-  *len = frame_len - 6;
-  destuff(frame + 4, packet, len);
+      char bcc2 = 0;
+      int i;
+      for (i = 0; i < *len; i++)
+        bcc2 ^= packet[i];
 
-  char *reply = create_US_frame(&reply_len, RR);
+      if (bcc2 == frame[frame_len - 2]) {
+        reply = create_US_frame(&reply_len, RR);
+        read_succesful = 1;
+      } else
+        reply = create_US_frame(&reply_len, REJ);
+    }
 
-  if (write_to_tty(fd, reply, reply_len) != 0) {
-    printf("Error write_to_tty() in function ll_read().\n");
-    return -1;
+    if (write_to_tty(fd, reply, reply_len) != 0) {
+      printf("Error write_to_tty() in function ll_read().\n");
+      return -1;
+    }
   }
-
   return 0;
 }
 
@@ -432,7 +448,9 @@ int is_frame_RR(char *reply) {
       reply[4] == (unsigned char)FLAG);
 }
 
-char *create_I_frame(int *frame_len, char *packet, int packet_len) {
+char *create_I_frame(int *frame_len, char *packet, int packet_len, int bcc2) {
+  static int s = 1;
+  s = !s;
 
   char *frame =
       (char *)malloc((6 + packet_len) * sizeof(char)); // Lacks byte stuffing
@@ -440,10 +458,10 @@ char *create_I_frame(int *frame_len, char *packet, int packet_len) {
 
   frame[0] = FLAG;
   frame[1] = SEND;
-  frame[2] = 0 | (1 << 6);
-  frame[3] = 0xFF;
+  frame[2] = s << 6;
+  frame[3] = frame[1] ^ frame[2];
   memcpy(frame + 4, packet, packet_len);
-  frame[packet_len + 4] = 0xFF;
+  frame[packet_len + 4] = bcc2;
   frame[packet_len + 5] = FLAG;
 
   return frame;

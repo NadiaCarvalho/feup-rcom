@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <stdint.h>
 
 typedef struct {
   int file_descriptor;     /* Serial port file descriptor */
