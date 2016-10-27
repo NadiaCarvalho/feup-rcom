@@ -102,6 +102,7 @@ int send_data(char *path, char *filename) {
   start_packet[4 + sizeof(file_info.st_size)] = filename_len;
   strcat(start_packet + 5 + sizeof(file_info.st_size), filename);
   ll_write(application.file_descriptor, start_packet, start_packet_len);
+
   /*
   * DATA PACKET
   */
@@ -110,7 +111,8 @@ int send_data(char *path, char *filename) {
   off_t bytes_remaining = file_size;
 
   for (i = 0; i <= file_size / PACKET_DATA_SIZE; i++) {
-    if (read(application.file_descriptor, data, PACKET_DATA_SIZE) <= 0) {
+
+    if (read(fd, data, PACKET_DATA_SIZE) <= 0) {
       printf("Error reading from file. Exiting...\n");
       return -1;
     }
@@ -128,14 +130,16 @@ int send_data(char *path, char *filename) {
     memcpy(information_packet + PACKET_HEADER_SIZE, data, PACKET_DATA_SIZE);
     ll_write(application.file_descriptor, information_packet, PACKET_SIZE);
     bytes_remaining -= PACKET_DATA_SIZE;
+    printf("Bytes remaining: %d\n", bytes_remaining);
   }
 
   /*
   * END PACKET
   */
   char end_packet[] = {3};
-  ll_write(fd, end_packet, 1);
-  exit(1);
+  ll_write(application.file_descriptor, end_packet, 1);
+  close(fd);
+  //exit(1);
   return 0;
 }
 
@@ -167,7 +171,6 @@ int receive_data() {
     return -1;
   }
 
-  printf("Reading data packets...\n");
   /**
   * Reading and parsing data packets
   */

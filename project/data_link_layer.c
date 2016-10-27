@@ -31,7 +31,7 @@ int write_to_tty(int fd, char *buf, int buf_length);
 int read_from_tty(int fd, char *frame, int *frame_len);
 int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *));
 char *create_I_frame(int *frame_len, char *packet, int packet_len);
-char *create_US_frame(int *frame_len, int control_bit);
+char *create_US_frame(int *frame_len, int control_byte);
 int is_frame_UA(char *reply);
 int is_frame_RR(char *reply);
 int is_frame_DISC(char *reply);
@@ -190,13 +190,7 @@ int ll_write(int fd, char *packet, int packet_len) {
 
   int frame_len;
   char *frame = create_I_frame(&frame_len, packet, packet_len);
-
-  // send_frame()
-  // write_to_tty(fd, frame, frame_len);
-  if (send_frame(fd, frame, frame_len, is_frame_RR) == 0)
-    printf("Received RR.\n");
-  else
-    printf("Didn't receive RR.\n");
+  send_frame(fd, frame, frame_len, is_frame_RR);
 
   return 0;
 }
@@ -240,7 +234,6 @@ int ll_close(int fd) {
       return -1;
     }
 
-    printf("Sending DISC...\n");
     if (write_to_tty(fd, create_US_frame(&frame_len, UA), frame_len) != 0) {
       printf("Couldn't write to tty on ll_close()\n");
       return -1;
@@ -257,7 +250,6 @@ int ll_close(int fd) {
 
     if (is_frame_DISC(msg)) {
       frame = create_US_frame(&frame_len, DISC);
-
       if (send_frame(fd, frame, frame_len, is_frame_UA) != 0) {
         printf("Couldn't send frame on ll_close().\n");
         return -1;
@@ -290,30 +282,32 @@ void print_as_hexadecimal(char *msg, int msg_len) {
 
 void timeout(int signum) { connection_timeouts++; }
 
-char *create_US_frame(int *frame_len, int control_bit) {
+char *create_US_frame(int *frame_len, int control_byte) {
   static char r = 0;
   char *buf = (char *)malloc(US_FRAME_LENGTH * sizeof(char));
   buf[0] = FLAG;
 
   if (data_link.stat == TRANSMITTER) {
-    if (control_bit == SET || control_bit == DISC)
+    if (control_byte == SET || control_byte == DISC)
       buf[1] = SEND;
     else
       buf[1] = RECEIVE;
   } else {
-    if (control_bit == RR || control_bit == REJ || control_bit == UA)
+    if (control_byte == RR || control_byte == REJ || control_byte == UA)
       buf[1] = SEND;
     else
       buf[1] = RECEIVE;
   }
 
-  buf[2] = r << 7 | control_bit;
+  if (control_byte == RR || control_byte == REJ) {
+    buf[2] = r << 7 | control_byte;
+    r = !r;
+  } else
+    buf[2] = control_byte;
+
   buf[3] = buf[1] ^ buf[2];
   buf[4] = FLAG;
   *frame_len = US_FRAME_LENGTH;
-
-  if (control_bit == RR || control_bit == REJ)
-    r = !r;
 
   return buf;
 }
@@ -365,13 +359,8 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
       frame[*frame_len] = buf;
       (*frame_len)++;
 
-    } else { // If no characters were read or there was an error
+    } else // If no characters were read or there was an error
       return -1;
-      /*if (errno == EINTR) // If the read() command was interrupted
-        return -1;
-      else
-        return -1;*/
-    }
   }
 
   return 0;
@@ -405,19 +394,13 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
       return -1;
     }
 
-    printf("Repeating...\n");
     alarm(3);
 
     if (read_from_tty(fd, reply, &reply_len) == 0) {
       // If the read() was successful
       alarm(0);
-      if (is_reply_valid(reply)) {
-        printf("Reply: ");
-        print_as_hexadecimal(reply, reply_len);
-        printf("  is valid.\n");
+      if (is_reply_valid(reply))
         break;
-      } else
-        printf("Didn't receive expected reply.\n");
 
     } else {
       printf("Error reading.\n");
@@ -440,10 +423,13 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
 int is_frame_RR(char *reply) {
   static char r = 1;
   r = !r;
-  return (reply[0] == FLAG &&
-          reply[1] == ((data_link.stat == TRANSMITTER) ? SEND : RECEIVE) &&
-          reply[2] == (r << 7 | RR) && reply[3] == (reply[1] ^ reply[2]) &&
-          reply[4] == FLAG);
+  return (
+      reply[0] == (unsigned char)FLAG &&
+      reply[1] ==
+          (unsigned char)((data_link.stat == TRANSMITTER) ? SEND : RECEIVE) &&
+      (unsigned char)reply[2] == (unsigned char)(r << 7 | RR) &&
+      (unsigned char)reply[3] == (unsigned char)(reply[1] ^ reply[2]) &&
+      reply[4] == (unsigned char)FLAG);
 }
 
 char *create_I_frame(int *frame_len, char *packet, int packet_len) {

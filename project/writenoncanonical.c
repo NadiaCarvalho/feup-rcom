@@ -33,7 +33,6 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-
   char path[] = ".";
   char filename[] = "pinguim.gif";
   send_data(path, filename);
