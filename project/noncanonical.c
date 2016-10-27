@@ -31,11 +31,7 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  char data[256];
-  int length;
-  receive_data(data, &length);
-
-  printf("%s\n", data);
+  receive_data();
 
   ll_close(fd);
   return 0;

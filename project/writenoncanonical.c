@@ -33,21 +33,10 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  char msg[255];
-  strcpy(msg, "Ola, o catotas e um gajo porreirinho.");
-  char msg_len = strlen(msg);
-  char start_packet[] = {2, 0, 1, msg_len};
-  char end_packet[] = {3};
-  char information_packet[255];
-  information_packet[0] = 1;
-  information_packet[1] = 0;
-  information_packet[2] = 0;
-  information_packet[3] = msg_len;
-  memcpy(information_packet+4, msg, msg_len);
 
-  ll_write(fd, start_packet, 4);
-  ll_write(fd, information_packet, msg_len + 4);
-  ll_write(fd, end_packet, 1);
+  char path[] = ".";
+  char filename[] = "pinguim.gif";
+  send_data(path, filename);
 
   ll_close(fd);
   return 0;

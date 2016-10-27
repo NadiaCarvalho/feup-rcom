@@ -6,6 +6,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <termios.h>
+#include <sys/stat.h>
+#include <stdlib.h>
+#include <fcntl.h>
 
 typedef struct {
   int file_descriptor;     /* Serial port file descriptor */
@@ -24,6 +27,11 @@ int set_up_connection(char *terminal, status stat);
 /**
 * Gets a full combination of packets and parses its information.
 */
-int receive_data(char *data, int *length);
+int receive_data();
+
+/**
+* Writes file to serial port.
+*/
+int send_data(char *path, char *filename);
 
 #endif

@@ -23,6 +23,7 @@ struct {
   unsigned int timeout;      /* Time to timeout e.g. 1 second */
   unsigned int num_retries;  /* Maximum number of retries */
   status stat;
+  struct sigaction old_action;
 } data_link;
 
 //'Private' functions
@@ -34,6 +35,7 @@ char *create_US_frame(int *frame_len, int control_bit);
 int is_frame_UA(char *reply);
 int is_frame_RR(char *reply);
 int is_frame_DISC(char *reply);
+void timeout(int signum);
 
 /**
 * Change the terminal settings
@@ -56,7 +58,8 @@ void destuff(char *packet, char *destuffed, int *packet_len);
 int set_terminal_attributes(int fd) {
   struct termios new_port_settings;
 
-  if (tcgetattr(fd, &old_port_settings) == -1) { /* save current port settings */
+  if (tcgetattr(fd, &old_port_settings) ==
+      -1) { /* save current port settings */
     printf("Error getting port settings.\n");
     close(fd);
     return -1;
@@ -141,6 +144,14 @@ int ll_open(int port, status stat) {
     return -1;
   }
 
+  struct sigaction new_action;
+  new_action.sa_handler = timeout;
+  new_action.sa_flags &=
+      !SA_RESTART; // Needed in order to block read from restarting.
+
+  if (sigaction(SIGALRM, &new_action, &data_link.old_action) == -1)
+    printf("Error installing new SIGALRM handler.\n");
+
   if (stat == TRANSMITTER) {
 
     char *frame = create_US_frame(&frame_len, SET);
@@ -224,12 +235,12 @@ int ll_close(int fd) {
 
   if (data_link.stat == TRANSMITTER) {
     frame = create_US_frame(&frame_len, DISC);
-
     if (send_frame(fd, frame, frame_len, is_frame_DISC) != 0) {
       printf("Couldn't send frame on ll_close().\n");
       return -1;
     }
 
+    printf("Sending DISC...\n");
     if (write_to_tty(fd, create_US_frame(&frame_len, UA), frame_len) != 0) {
       printf("Couldn't write to tty on ll_close()\n");
       return -1;
@@ -254,9 +265,8 @@ int ll_close(int fd) {
     }
   }
 
-  // Send DISC to receiver
-  // Wait for DISC
-  // Send UA
+  if (sigaction(SIGALRM, &data_link.old_action, NULL) == -1)
+    printf("Error setting SIGALRM handler to original.\n");
 
   if (tcsetattr(fd, TCSANOW, &old_port_settings) == -1)
     printf("Error settings old port settings.\n");
@@ -281,7 +291,7 @@ void print_as_hexadecimal(char *msg, int msg_len) {
 void timeout(int signum) { connection_timeouts++; }
 
 char *create_US_frame(int *frame_len, int control_bit) {
-
+  static char r = 0;
   char *buf = (char *)malloc(US_FRAME_LENGTH * sizeof(char));
   buf[0] = FLAG;
 
@@ -297,16 +307,18 @@ char *create_US_frame(int *frame_len, int control_bit) {
       buf[1] = RECEIVE;
   }
 
-  buf[2] = control_bit;
+  buf[2] = r << 7 | control_bit;
   buf[3] = buf[1] ^ buf[2];
   buf[4] = FLAG;
   *frame_len = US_FRAME_LENGTH;
+
+  if (control_bit == RR || control_bit == REJ)
+    r = !r;
 
   return buf;
 }
 
 int write_to_tty(int fd, char *buf, int buf_length) {
-
   int total_written_chars = 0;
   int written_chars = 0;
 
@@ -314,6 +326,8 @@ int write_to_tty(int fd, char *buf, int buf_length) {
     written_chars = write(fd, buf, buf_length);
 
     if (written_chars <= 0) {
+      printf("Written chars: %d\n", written_chars);
+      printf("%s\n", strerror(errno));
       return -1;
     }
 
@@ -331,9 +345,13 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
   int initial_flag = 0;
 
   STOP = 0;
-  while (!STOP) { /* loop for input */
-
+  while (!STOP) {                   /* loop for input */
     read_chars = read(fd, &buf, 1); /* returns after x chars have been input */
+
+    if (read_chars == 0) {
+      printf("EOF.\n");
+      return -1;
+    }
 
     if (read_chars > 0) { // If characters were read
       if (buf == FLAG) {
@@ -347,9 +365,12 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
       frame[*frame_len] = buf;
       (*frame_len)++;
 
-    } else {              // If no characters were read or there was an error
-      if (errno == EINTR) // If the read() command was interrupted
+    } else { // If no characters were read or there was an error
+      return -1;
+      /*if (errno == EINTR) // If the read() command was interrupted
         return -1;
+      else
+        return -1;*/
     }
   }
 
@@ -358,17 +379,15 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
 
 int is_frame_UA(char *reply) {
 
-  return (
-      reply[0] == FLAG &&
-      reply[1] ==
-          ((data_link.stat == TRANSMITTER) ? SEND : RECEIVE) &&
-      reply[2] == UA && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
+  return (reply[0] == FLAG &&
+          reply[1] == ((data_link.stat == TRANSMITTER) ? SEND : RECEIVE) &&
+          reply[2] == UA && reply[3] == (reply[1] ^ reply[2]) &&
+          reply[4] == FLAG);
 }
 
 int is_frame_DISC(char *reply) {
   return (reply[0] == FLAG &&
-          reply[1] == ((data_link.stat == TRANSMITTER) ? RECEIVE
-                                                                     : SEND) &&
+          reply[1] == ((data_link.stat == TRANSMITTER) ? RECEIVE : SEND) &&
           reply[2] == DISC && reply[3] == (reply[1] ^ reply[2]) &&
           reply[4] == FLAG);
 }
@@ -376,42 +395,42 @@ int is_frame_DISC(char *reply) {
 // is_reply_valid is a function that checks if the reply received is valid.
 // If it is, the send_frame ends correctly. If not, it continues its loop.
 int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
-  struct sigaction new_action, old_action;
   char reply[255];
   int reply_len;
 
-  new_action.sa_handler = timeout;
-  new_action.sa_flags &=
-      !SA_RESTART; // Needed in order to block read from restarting.
-
-  if (sigaction(SIGALRM, &new_action, &old_action) == -1)
-    printf("Error installing new SIGALRM handler.\n");
-
+  connection_timeouts = 0;
   while (connection_timeouts < ACCEPTABLE_TIMEOUTS) {
     if (write_to_tty(fd, frame, len)) {
-      if (sigaction(SIGALRM, &old_action, NULL) == -1)
-        printf("Error setting SIGALRM handler to original.\n");
+      printf("Failed write.\n");
       return -1;
     }
 
+    printf("Repeating...\n");
     alarm(3);
 
-    if (read_from_tty(fd, reply, &reply_len) ==
-        0) { // If the read() was successful
-
-      if (is_reply_valid(reply))
+    if (read_from_tty(fd, reply, &reply_len) == 0) {
+      // If the read() was successful
+      alarm(0);
+      if (is_reply_valid(reply)) {
+        printf("Reply: ");
+        print_as_hexadecimal(reply, reply_len);
+        printf("  is valid.\n");
         break;
+      } else
+        printf("Didn't receive expected reply.\n");
 
     } else {
       printf("Error reading.\n");
-      if (sigaction(SIGALRM, &old_action, NULL) == -1)
-        printf("Error setting SIGALRM handler to original.\n");
+      alarm(0);
       return -1;
     }
-    printf("Connection failed. Retrying %d out of %d...\n", connection_timeouts,
-           ACCEPTABLE_TIMEOUTS);
+
+    if (connection_timeouts > 0)
+      printf("Connection failed. Retrying %d out of %d...\n",
+             connection_timeouts, ACCEPTABLE_TIMEOUTS);
   }
 
+  alarm(0);
   if (connection_timeouts == ACCEPTABLE_TIMEOUTS)
     return -1;
   else
@@ -419,11 +438,12 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
 }
 
 int is_frame_RR(char *reply) {
-  return (
-      reply[0] == FLAG &&
-      reply[1] ==
-          ((data_link.stat == TRANSMITTER) ? SEND : RECEIVE) &&
-      reply[2] == RR && reply[3] == (reply[1] ^ reply[2]) && reply[4] == FLAG);
+  static char r = 1;
+  r = !r;
+  return (reply[0] == FLAG &&
+          reply[1] == ((data_link.stat == TRANSMITTER) ? SEND : RECEIVE) &&
+          reply[2] == (r << 7 | RR) && reply[3] == (reply[1] ^ reply[2]) &&
+          reply[4] == FLAG);
 }
 
 char *create_I_frame(int *frame_len, char *packet, int packet_len) {
@@ -445,7 +465,7 @@ char *create_I_frame(int *frame_len, char *packet, int packet_len) {
 
 char *stuff(char *packet, int *packet_len) {
   // TODO: Variable size.
-  char* stuffed = (char*) malloc(((*packet_len) + 255) * sizeof(char));
+  char *stuffed = (char *)malloc(((*packet_len) + 255) * sizeof(char));
 
   int packet_iterator;
   int stuff_iterator = 0;
