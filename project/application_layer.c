@@ -139,7 +139,7 @@ int send_data(char *path, char *filename) {
   char end_packet[] = {3};
   ll_write(application.file_descriptor, end_packet, 1);
   close(fd);
-  //exit(1);
+  // exit(1);
   return 0;
 }
 
@@ -191,6 +191,11 @@ int receive_data() {
       return -1;
     }
   }
+
+  struct stat file_info;
+  fstat(fd, &file_info);
+  printf("Expected %d bytes.\nReceived %d bytes.\n", file_size,
+         file_info.st_size);
 
   close(fd);
   return 0;
