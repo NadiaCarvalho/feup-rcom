@@ -40,6 +40,8 @@ int is_I_frame_header_valid(char *frame, int frame_len);
 void timeout(int signum);
 void print_as_hexadecimal(char *msg, int msg_len);
 int has_valid_sequence_number(char control_byte);
+int reset_settings(int fd);
+int close_receiver_connection(int fd);
 
 /**
 * Change the terminal settings
@@ -207,6 +209,12 @@ int ll_read(int fd, char *packet, int *packet_len) {
   while (!read_succesful) {
     read_from_tty(fd, frame, &frame_len);
 
+    if (is_frame_DISC(frame)) {
+      close_receiver_connection(fd);
+      reset_settings(fd);
+      return -1;
+    }
+
     if (!is_I_frame_header_valid(frame, frame_len)) // Invalid frame
       reply = create_US_frame(&reply_len, REJ);
     else { // Frame is valid
@@ -288,27 +296,12 @@ int ll_close(int fd) {
       return -1;
     }
 
-    if (is_frame_DISC(msg)) {
-      frame = create_US_frame(&frame_len, DISC);
-      if (send_frame(fd, frame, frame_len, is_frame_UA) != 0) {
-        printf("Couldn't send frame on ll_close().\n");
-        return -1;
-      }
-    }
+    if (is_frame_DISC(msg))
+      close_receiver_connection(fd);
   }
 
-  if (sigaction(SIGALRM, &data_link.old_action, NULL) == -1)
-    printf("Error setting SIGALRM handler to original.\n");
-
-  if (tcsetattr(fd, TCSANOW, &old_port_settings) == -1)
-    printf("Error settings old port settings.\n");
-
-  if (close(fd)) {
-    printf("Error closing terminal file descriptor.\n");
-    return -1;
-  }
-
-  printf("Connection succesfully closed.\n");
+  if (reset_settings(fd) == 0)
+    printf("Connection succesfully closed.\n");
 
   return 0;
 }
@@ -548,4 +541,30 @@ int has_valid_sequence_number(char control_byte) {
   } else
     s = !s;
   return 1;
+}
+
+int close_receiver_connection(int fd) {
+  int frame_len = 0;
+  char *frame = create_US_frame(&frame_len, DISC);
+  if (send_frame(fd, frame, frame_len, is_frame_UA) != 0) {
+    printf("Couldn't send frame on ll_close().\n");
+    return -1;
+  }
+
+  return 0;
+}
+
+int reset_settings(int fd) {
+  if (sigaction(SIGALRM, &data_link.old_action, NULL) == -1)
+    printf("Error setting SIGALRM handler to original.\n");
+
+  if (tcsetattr(fd, TCSANOW, &old_port_settings) == -1)
+    printf("Error settings old port settings.\n");
+
+  if (close(fd)) {
+    printf("Error closing terminal file descriptor.\n");
+    return -1;
+  }
+
+  return 0;
 }

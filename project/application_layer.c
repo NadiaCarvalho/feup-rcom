@@ -164,7 +164,7 @@ int receive_data() {
   do {
     if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
       printf("Error ll_read() in function receive_data().\n");
-      return -1;
+      exit(-1);
     }
   } while (packet_len == 0 || packet[0] != (unsigned char)START_PACKET_BYTE);
 
@@ -192,7 +192,7 @@ int receive_data() {
   if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
     printf("Error ll_read() in function receive_data().\n");
     close(fd);
-    return -1;
+    exit(-1);
   }
 
   while (packet_len == 0 || packet[0] != (unsigned char)END_PACKET_BYTE) {
@@ -206,7 +206,7 @@ int receive_data() {
     if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
       printf("Error ll_read() in function receive_data().\n");
       close(fd);
-      return -1;
+      exit(-1);
     }
   }
 
