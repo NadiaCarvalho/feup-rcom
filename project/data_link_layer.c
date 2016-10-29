@@ -239,8 +239,7 @@ int ll_read(int fd, char *packet, int *packet_len) {
         /* Only need to check sequence number if packet is a dat packet.
         * If it is, and the sequence number is invalid, discard the packet
         * by setting its length to 0 */
-        if (packet[0] == DATA_PACKET_BYTE &&
-            !has_valid_sequence_number(frame[2]))
+        if (!has_valid_sequence_number(frame[2]))
           *packet_len = 0;
 
         read_succesful = 1;
@@ -545,8 +544,8 @@ int has_valid_sequence_number(char control_byte) {
   static int s = 0;
 
   if (control_byte ^ (s << 6)) {
-    s = !s;
-    return 1;
-  } else
     return 0;
+  } else
+    s = !s;
+  return 1;
 }

@@ -122,7 +122,7 @@ int send_data(char *path, char *filename) {
   * DATA PACKET
   */
   char data[PACKET_DATA_SIZE];
-  int i;
+  int i = 0;
   off_t bytes_remaining = file_size;
 
   while (bytes_remaining > 0) {
@@ -188,6 +188,7 @@ int receive_data() {
   /**
   * Reading and parsing data packets
   */
+  char cur_seq_num = 0;
   if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
     printf("Error ll_read() in function receive_data().\n");
     close(fd);
@@ -195,10 +196,11 @@ int receive_data() {
   }
 
   while (packet_len == 0 || packet[0] != (unsigned char)END_PACKET_BYTE) {
-    if (packet_len > 0) {
+    if (packet_len > 0 && cur_seq_num == packet[1]) {
       unsigned int data_len =
           (unsigned char)packet[2] * 256 + (unsigned char)packet[3];
       write(fd, packet + 4, data_len);
+      cur_seq_num++;
     }
 
     if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
