@@ -30,7 +30,7 @@ int set_up_connection(char *terminal, status stat) {
   }
 
   if ((application.file_descriptor =
-           ll_open(port, application.app_layer_status)) < 0) {
+            ll_open(port, application.app_layer_status)) < 0) {
     printf("application_layer :: set_up_connection() :: ll_open failed\n");
     return -1;
   }
@@ -199,7 +199,6 @@ int receive_data() {
   }
 
   while (packet[0] != (unsigned char)END_PACKET_BYTE) {
-    // Lacks sequence number.
     unsigned int data_len =
         (unsigned char)packet[2] * 256 + (unsigned char)packet[3];
     write(fd, packet + 4, data_len);
