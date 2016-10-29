@@ -36,9 +36,10 @@ char *create_US_frame(int *frame_len, int control_byte);
 int is_frame_UA(char *reply);
 int is_frame_RR(char *reply);
 int is_frame_DISC(char *reply);
-int is_I_frame_valid(char *frame, int frame_len);
+int is_I_frame_header_valid(char *frame, int frame_len);
 void timeout(int signum);
 void print_as_hexadecimal(char *msg, int msg_len);
+int has_valid_sequence_number(char control_byte);
 
 /**
 * Change the terminal settings
@@ -91,23 +92,20 @@ int set_terminal_attributes(int fd) {
   return 0;
 }
 
-// Checks are not full. Need to check BCC of the packet.
-int is_I_frame_valid(char *frame, int frame_len) {
-  static int s = 1;
-  s = !s;
+int is_I_frame_header_valid(char *frame, int frame_len) {
 
   if (frame_len < 6)
     return 0;
 
-  return frame[0] == FLAG && frame[1] == SEND && frame[2] == s << 6 &&
+  return frame[0] == FLAG && frame[1] == SEND &&
          frame[3] == (frame[1] ^ frame[2]);
 }
 
 /**
- * TODO:
- * if stat == TRANSMITTER -> send SET, receive UA
- * reverse if stat == RECEIVE
- */
+* TODO:
+* if stat == TRANSMITTER -> send SET, receive UA
+* reverse if stat == RECEIVE
+*/
 int ll_open(int port, status stat) {
 
   int fd; // value to be returned
@@ -134,8 +132,8 @@ int ll_open(int port, status stat) {
 
   data_link.stat = stat;
   /**
-   * Opening the serial port
-   */
+  * Opening the serial port
+  */
   if ((fd = open(data_link.port, O_RDWR | O_NOCTTY)) < 0) {
     printf("Error opening terminal '%s'\n", data_link.port);
     return -1;
@@ -155,7 +153,6 @@ int ll_open(int port, status stat) {
     printf("Error installing new SIGALRM handler.\n");
 
   if (stat == TRANSMITTER) {
-
     char *frame = create_US_frame(&frame_len, SET);
     if (send_frame(fd, frame, frame_len, is_frame_UA) == -1) {
       printf("data_link_layer :: ll_open() :: send_frame failed\n");
@@ -194,23 +191,27 @@ int ll_write(int fd, char *packet, int packet_len) {
   return 0;
 }
 
+/**
+* Read a frame from the serial port and check its validity and make sure
+* it is not a duplicate
+* After the check, send the appropriate response to the TRANSMITTER
+*/
 int ll_read(int fd, char *packet, int *packet_len) {
-
-  // Reads and checks for validity
   char *reply;
   int reply_len;
 
   char frame[256];
   int frame_len;
+
   int read_succesful = 0;
   while (!read_succesful) {
     read_from_tty(fd, frame, &frame_len);
-    // FIXME: Check if frame is duplicated
-    if (!is_I_frame_valid(frame, frame_len)) {
+
+    if (!is_I_frame_header_valid(frame, frame_len)) // Invalid frame
       reply = create_US_frame(&reply_len, REJ);
-    } else {
+    else { // Frame is valid
       // Updates the packet length.
-      *packet_len = frame_len - 6;
+      *packet_len = frame_len - I_FRAME_HEADER_SIZE;
 
       char expected_bcc2;
       if (frame[frame_len - 3] == ESCAPE) {
@@ -223,26 +224,46 @@ int ll_read(int fd, char *packet, int *packet_len) {
 
       destuff(frame + 4, packet, packet_len);
 
-      char bcc2 = 0;
+      /* Create a BCC2 for the I frame
+      check if the received one is correct*/
+      char calculated_bcc2 = 0;
       int i;
-      for (i = 0; i < *packet_len; i++) // Off by -1
-        bcc2 ^= packet[i];
+      for (i = 0; i < *packet_len; i++)
+        calculated_bcc2 ^= packet[i];
 
-      if (bcc2 == expected_bcc2) {
+      if (calculated_bcc2 ==
+          expected_bcc2) { // valid BCC2 - may still be a duplicate
+
         reply = create_US_frame(&reply_len, RR);
-        read_succesful = 1;
-      } else
-        reply = create_US_frame(&reply_len, REJ);
-    }
 
-    if (write_to_tty(fd, reply, reply_len) != 0) {
-      printf("Error write_to_tty() in function ll_read().\n");
-      return -1;
+        /* Only need to check sequence number if packet is a dat packet.
+        * If it is, and the sequence number is invalid, discard the packet
+        * by setting its length to 0 */
+        if (packet[0] == DATA_PACKET_BYTE &&
+            !has_valid_sequence_number(frame[2]))
+          *packet_len = 0;
+
+        read_succesful = 1;
+      } else { // BCC2 does not match -> check sequence number
+        if (has_valid_sequence_number(frame[2])) // new frame, request retry
+          reply = create_US_frame(&reply_len, REJ);
+        else {
+          reply = create_US_frame(&reply_len,
+                                  RR); // duplicate frame, send RR and discard
+          read_succesful = 1;
+          *packet_len = 0;
+        }
+      }
+
+      if (write_to_tty(fd, reply, reply_len) != 0) {
+        printf("Error write_to_tty() in function ll_read().\n");
+        return -1;
+      }
     }
   }
+
   return 0;
 }
-
 int ll_close(int fd) {
   char *frame;
   int frame_len = 0;
@@ -351,8 +372,37 @@ int write_to_tty(int fd, char *buf, int buf_length) {
   return 0;
 }
 
-int read_from_tty(int fd, char *frame, int *frame_len) {
+char *create_I_frame(int *frame_len, char *packet, int packet_len) {
+  static char s = 1;
+  s = !s;
 
+  // Calculate BCC2
+  char bcc2 = 0;
+
+  int i;
+  for (i = 0; i < packet_len; i++)
+    bcc2 ^= packet[i];
+
+  // This is executed here in order to set the correct array size.
+  int bcc_len = 1;
+  char *stuffed_bcc = stuff(&bcc2, &bcc_len);
+  char *stuffed_packet = stuff(packet, &packet_len);
+
+  *frame_len = 5 + packet_len + bcc_len;
+  char *frame = (char *)malloc(*frame_len * sizeof(char));
+
+  frame[0] = FLAG;
+  frame[1] = SEND;
+  frame[2] = s << 6;
+  frame[3] = frame[1] ^ frame[2];
+  memcpy(frame + 4, stuffed_packet, packet_len);        // Copy packet content
+  memcpy(frame + packet_len + 4, stuffed_bcc, bcc_len); // Copy bcc2
+
+  frame[packet_len + 4 + bcc_len] = FLAG;
+  return frame;
+}
+
+int read_from_tty(int fd, char *frame, int *frame_len) {
   int read_chars = 0;
   char buf;
   *frame_len = 0;
@@ -386,6 +436,20 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
   return 0;
 }
 
+void destuff(char *packet, char *destuffed, int *packet_len) {
+  int destuff_iterator = 0;
+
+  for (int i = 0; i < *packet_len; i++) {
+    if (packet[i] == ESCAPE) {
+      destuffed[destuff_iterator] = packet[i + 1] ^ STUFFING_BYTE;
+      i++;
+    } else
+      destuffed[destuff_iterator] = packet[i];
+    destuff_iterator++;
+  }
+
+  *packet_len = destuff_iterator;
+}
 int is_frame_UA(char *reply) {
 
   return (reply[0] == FLAG &&
@@ -401,8 +465,10 @@ int is_frame_DISC(char *reply) {
           reply[4] == FLAG);
 }
 
-// is_reply_valid is a function that checks if the reply received is valid.
-// If it is, the send_frame ends correctly. If not, it continues its loop.
+// is_reply_valid is a function that checks if the reply received is
+// valid.
+// If it is, the send_frame ends correctly. If not, it continues its
+// loop.
 int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
   char reply[255];
   int reply_len;
@@ -452,37 +518,6 @@ int is_frame_RR(char *reply) {
       reply[4] == (unsigned char)FLAG);
 }
 
-char *create_I_frame(int *frame_len, char *packet, int packet_len) {
-  static char s = 1;
-  s = !s;
-
-  // Calculate BCC2
-  char bcc2 = 0;
-
-  int i;
-  for (i = 0; i < packet_len; i++)
-    bcc2 ^= packet[i];
-
-  // This is executed here in order to set the correct array size.
-  int bcc_len = 1;
-  char *stuffed_bcc = stuff(&bcc2, &bcc_len);
-  char *stuffed_packet = stuff(packet, &packet_len);
-
-  *frame_len = 5 + packet_len + bcc_len;
-  char *frame = (char *)malloc(*frame_len * sizeof(char));
-
-  frame[0] = FLAG;
-  frame[1] = SEND;
-  frame[2] = s << 6;
-  frame[3] = frame[1] ^ frame[2];
-  memcpy(frame + 4, stuffed_packet, packet_len);        // Copy packet content
-  memcpy(frame + packet_len + 4, stuffed_bcc, bcc_len); // Copy bcc2
-
-  frame[packet_len + 4 + bcc_len] = FLAG;
-
-  return frame;
-}
-
 char *stuff(char *packet, int *packet_len) {
   // TODO: Variable size.
   char *stuffed = (char *)malloc(((*packet_len) + 255) * sizeof(char));
@@ -506,17 +541,12 @@ char *stuff(char *packet, int *packet_len) {
   return stuffed;
 }
 
-void destuff(char *packet, char *destuffed, int *packet_len) {
-  int destuff_iterator = 0;
+int has_valid_sequence_number(char control_byte) {
+  static int s = 0;
 
-  for (int i = 0; i < *packet_len; i++) {
-    if (packet[i] == ESCAPE) {
-      destuffed[destuff_iterator] = packet[i + 1] ^ STUFFING_BYTE;
-      i++;
-    } else
-      destuffed[destuff_iterator] = packet[i];
-    destuff_iterator++;
-  }
-
-  *packet_len = destuff_iterator;
+  if (control_byte ^ (s << 6)) {
+    s = !s;
+    return 1;
+  } else
+    return 0;
 }

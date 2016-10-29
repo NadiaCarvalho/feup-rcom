@@ -24,6 +24,10 @@
 #define US_FRAME_LENGTH 5
 #define I_FRAME_HEADER_SIZE 6
 
+#define DATA_PACKET_BYTE 1
+#define START_PACKET_BYTE 2
+#define END_PACKET_BYTE 3
+
 typedef enum { TRANSMITTER, RECEIVER } status;
 
 /**

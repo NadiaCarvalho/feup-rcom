@@ -1,9 +1,5 @@
 #include "application_layer.h"
 
-#define DATA_PACKET_BYTE 1
-#define START_PACKET_BYTE 2
-#define END_PACKET_BYTE 3
-
 #define FILE_SIZE_BYTE 0
 #define FILE_NAME_BYTE 1
 #define FILE_PERMISSIONS_BYTE 2
@@ -170,7 +166,7 @@ int receive_data() {
       printf("Error ll_read() in function receive_data().\n");
       return -1;
     }
-  } while (packet[0] != (unsigned char)START_PACKET_BYTE);
+  } while (packet_len == 0 || packet[0] != (unsigned char)START_PACKET_BYTE);
 
   off_t file_size = get_file_size(packet, packet_len);
   char *file_name = get_file_name(packet, packet_len);
@@ -198,11 +194,13 @@ int receive_data() {
     return -1;
   }
 
-  while (packet[0] != (unsigned char)END_PACKET_BYTE) {
-    // Lacks sequence number.
-    unsigned int data_len =
-        (unsigned char)packet[2] * 256 + (unsigned char)packet[3];
-    write(fd, packet + 4, data_len);
+  while (packet_len == 0 || packet[0] != (unsigned char)END_PACKET_BYTE) {
+    if (packet_len > 0) {
+      unsigned int data_len =
+          (unsigned char)packet[2] * 256 + (unsigned char)packet[3];
+      write(fd, packet + 4, data_len);
+    }
+
     if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
       printf("Error ll_read() in function receive_data().\n");
       close(fd);
