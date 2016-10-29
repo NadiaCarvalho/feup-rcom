@@ -22,6 +22,8 @@
 #define COM2_PORT "/dev/ttyS1"
 
 #define US_FRAME_LENGTH 5
+#define I_FRAME_HEADER_SIZE 6
+
 typedef enum { TRANSMITTER, RECEIVER } status;
 
 /**
@@ -32,7 +34,7 @@ typedef enum { TRANSMITTER, RECEIVER } status;
 * returning -1 otherwise.
 */
 int ll_open(int port, status stat);
-void print_as_hexadecimal(char *msg, int msg_len);
+
 /**
 * Writes the given msg with len length to the
 * given fd.
@@ -45,7 +47,7 @@ int ll_write(int fd, char *msg, int len);
 * msg, updating len accordingly.
 * Returns -1 on error.
 */
-int ll_read(int fd, char *msg, int *len);
+int ll_read(int fd, char *msg, int *packet_len);
 
 /**
 * Closes the given fd and sets the port settings.

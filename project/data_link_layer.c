@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,13 +31,14 @@ struct {
 int write_to_tty(int fd, char *buf, int buf_length);
 int read_from_tty(int fd, char *frame, int *frame_len);
 int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *));
-char *create_I_frame(int *frame_len, char *packet, int packet_len, int bcc2);
+char *create_I_frame(int *frame_len, char *packet, int packet_len);
 char *create_US_frame(int *frame_len, int control_byte);
 int is_frame_UA(char *reply);
 int is_frame_RR(char *reply);
 int is_frame_DISC(char *reply);
 int is_I_frame_valid(char *frame, int frame_len);
 void timeout(int signum);
+void print_as_hexadecimal(char *msg, int msg_len);
 
 /**
 * Change the terminal settings
@@ -185,22 +187,14 @@ int ll_open(int port, status stat) {
 int ll_write(int fd, char *packet, int packet_len) {
   // Writes and checks for validity
   // Using send_frame
-  int bcc2 = 0;
-
-  int i;
-  for (i = 0; i < packet_len; i++)
-    bcc2 ^= packet[i];
-  // FIXME: Stuff bcc2 if needed
-  packet = stuff(packet, &packet_len);
-
   int frame_len;
-  char *frame = create_I_frame(&frame_len, packet, packet_len, bcc2);
+  char *frame = create_I_frame(&frame_len, packet, packet_len);
   send_frame(fd, frame, frame_len, is_frame_RR);
 
   return 0;
 }
 
-int ll_read(int fd, char *packet, int *len) {
+int ll_read(int fd, char *packet, int *packet_len) {
 
   // Reads and checks for validity
   char *reply;
@@ -211,20 +205,30 @@ int ll_read(int fd, char *packet, int *len) {
   int read_succesful = 0;
   while (!read_succesful) {
     read_from_tty(fd, frame, &frame_len);
-    //FIXME: Check if frame is duplicated
+    // FIXME: Check if frame is duplicated
     if (!is_I_frame_valid(frame, frame_len)) {
       reply = create_US_frame(&reply_len, REJ);
     } else {
       // Updates the packet length.
-      *len = frame_len - 6;
-      destuff(frame + 4, packet, len);
+      *packet_len = frame_len - 6;
+
+      char expected_bcc2;
+      if (frame[frame_len - 3] == ESCAPE) {
+        expected_bcc2 = frame[frame_len - 2] ^ STUFFING_BYTE;
+        // If the BCC was stuffed, the frame header is one byte bigger
+        // So the packet length will be one byte shorter.
+        *packet_len = *packet_len - 1;
+      } else
+        expected_bcc2 = frame[frame_len - 2];
+
+      destuff(frame + 4, packet, packet_len);
 
       char bcc2 = 0;
       int i;
-      for (i = 0; i < *len; i++)
+      for (i = 0; i < *packet_len; i++) // Off by -1
         bcc2 ^= packet[i];
 
-      if (bcc2 == frame[frame_len - 2]) {
+      if (bcc2 == expected_bcc2) {
         reply = create_US_frame(&reply_len, RR);
         read_succesful = 1;
       } else
@@ -292,7 +296,7 @@ int ll_close(int fd) {
 void print_as_hexadecimal(char *msg, int msg_len) {
   int i;
   for (i = 0; i < msg_len; i++)
-    printf("%02X ", msg[i]);
+    printf("%02X ", (unsigned char)msg[i]);
   fflush(stdout);
 }
 
@@ -448,21 +452,33 @@ int is_frame_RR(char *reply) {
       reply[4] == (unsigned char)FLAG);
 }
 
-char *create_I_frame(int *frame_len, char *packet, int packet_len, int bcc2) {
-  static int s = 1;
+char *create_I_frame(int *frame_len, char *packet, int packet_len) {
+  static char s = 1;
   s = !s;
 
-  char *frame =
-      (char *)malloc((6 + packet_len) * sizeof(char)); // Lacks byte stuffing
-  *frame_len = 6 + packet_len;
+  // Calculate BCC2
+  char bcc2 = 0;
+
+  int i;
+  for (i = 0; i < packet_len; i++)
+    bcc2 ^= packet[i];
+
+  // This is executed here in order to set the correct array size.
+  int bcc_len = 1;
+  char *stuffed_bcc = stuff(&bcc2, &bcc_len);
+  char *stuffed_packet = stuff(packet, &packet_len);
+
+  *frame_len = 5 + packet_len + bcc_len;
+  char *frame = (char *)malloc(*frame_len * sizeof(char));
 
   frame[0] = FLAG;
   frame[1] = SEND;
   frame[2] = s << 6;
   frame[3] = frame[1] ^ frame[2];
-  memcpy(frame + 4, packet, packet_len);
-  frame[packet_len + 4] = bcc2;
-  frame[packet_len + 5] = FLAG;
+  memcpy(frame + 4, stuffed_packet, packet_len);        // Copy packet content
+  memcpy(frame + packet_len + 4, stuffed_bcc, bcc_len); // Copy bcc2
+
+  frame[packet_len + 4 + bcc_len] = FLAG;
 
   return frame;
 }
@@ -495,10 +511,10 @@ void destuff(char *packet, char *destuffed, int *packet_len) {
 
   for (int i = 0; i < *packet_len; i++) {
     if (packet[i] == ESCAPE) {
-      destuffed[destuff_iterator] = packet[++i] ^ STUFFING_BYTE;
+      destuffed[destuff_iterator] = packet[i + 1] ^ STUFFING_BYTE;
+      i++;
     } else
       destuffed[destuff_iterator] = packet[i];
-
     destuff_iterator++;
   }
 
