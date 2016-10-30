@@ -16,6 +16,7 @@
 volatile int STOP = 0;
 struct termios old_port_settings;
 int connection_timeouts = 0;
+int ignore_flag = 0;
 
 struct {
   char port[20]; /* Serial port device e.g. /dev/ttyS0 */
@@ -38,10 +39,10 @@ int is_frame_RR(char *reply);
 int is_frame_DISC(char *reply);
 int is_I_frame_header_valid(char *frame, int frame_len);
 void timeout(int signum);
-void print_as_hexadecimal(char *msg, int msg_len);
-int has_valid_sequence_number(char control_byte);
+int has_valid_sequence_number(char control_byte, int s);
 int reset_settings(int fd);
 int close_receiver_connection(int fd);
+void print_as_hexadecimal(char *msg, int msg_len);
 
 /**
 * Change the terminal settings
@@ -80,7 +81,7 @@ int set_terminal_attributes(int fd) {
   new_port_settings.c_lflag = 0;
 
   new_port_settings.c_cc[VTIME] =
-      30; /* inter-character timer unused in 1/10th of a second*/
+      0; /* inter-character timer unused in 1/10th of a second*/
   new_port_settings.c_cc[VMIN] = 1; /* blocking read until x chars received */
 
   tcflush(fd, TCIOFLUSH);
@@ -140,6 +141,7 @@ int ll_open(int port, status stat) {
     printf("Error opening terminal '%s'\n", data_link.port);
     return -1;
   }
+
   if (set_terminal_attributes(fd) != 0) {
     printf("Error set_terminal_attributes() in function ll_open().\n");
     return -1;
@@ -201,20 +203,22 @@ int ll_read(int fd, char *packet, int *packet_len) {
 
   char frame[512];
   int frame_len;
+  ignore_flag = 0;
+  static int s = 0;
 
   int read_succesful = 0;
   while (!read_succesful) {
     read_from_tty(fd, frame, &frame_len);
-
     if (is_frame_DISC(frame)) {
       close_receiver_connection(fd);
       reset_settings(fd);
       return -1;
     }
 
-    if (!is_I_frame_header_valid(frame, frame_len)) // Invalid frame
+    if (!is_I_frame_header_valid(frame, frame_len)) {// Invalid frame
+      printf("Invalid frame header. Rejecting frame..\n");
       reply = create_US_frame(&reply_len, REJ);
-    else { // Frame is valid
+    } else { // Frame is valid
       // Updates the packet length.
       *packet_len = frame_len - I_FRAME_HEADER_SIZE;
 
@@ -241,17 +245,17 @@ int ll_read(int fd, char *packet, int *packet_len) {
 
         reply = create_US_frame(&reply_len, RR);
 
-        /* Only need to check sequence number if packet is a dat packet.
+        /* Only need to check sequence number if packet is a data packet.
         * If it is, and the sequence number is invalid, discard the packet
         * by setting its length to 0 */
-        if (!has_valid_sequence_number(frame[2]))
+        if (!has_valid_sequence_number(frame[2], s))
           *packet_len = 0;
 
         read_succesful = 1;
       } else { // BCC2 does not match -> check sequence number
-        if (has_valid_sequence_number(frame[2])) // new frame, request retry
+        if (has_valid_sequence_number(frame[2], s))  // new frame, request retry
           reply = create_US_frame(&reply_len, REJ);
-        else {
+         else {
           reply = create_US_frame(&reply_len,
                                   RR); // duplicate frame, send RR and discard
           read_succesful = 1;
@@ -263,6 +267,12 @@ int ll_read(int fd, char *packet, int *packet_len) {
         printf("Error write_to_tty() in function ll_read().\n");
         return -1;
       }
+
+      if(!read_succesful) {
+        printf("Found invalid frame!\n");
+        ignore_flag = 1;
+      } else //Only flip sequence number if the whole frame is valid.
+        s = !s;
     }
   }
 
@@ -309,7 +319,7 @@ int ll_close(int fd) {
 void print_as_hexadecimal(char *msg, int msg_len) {
   int i;
   for (i = 0; i < msg_len; i++)
-    printf("%02X ", (unsigned char)msg[i]);
+    printf("%02X ", msg[i] & 0xFF);
   fflush(stdout);
 }
 
@@ -351,6 +361,7 @@ int write_to_tty(int fd, char *buf, int buf_length) {
 
   while (total_written_chars < buf_length) {
     written_chars = write(fd, buf, buf_length);
+
     if (written_chars <= 0) {
       printf("Written chars: %d\n", written_chars);
       printf("%s\n", strerror(errno));
@@ -403,18 +414,35 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
   while (!STOP) {                   /* loop for input */
     read_chars = read(fd, &buf, 1); /* returns after x chars have been input */
 
+    if (read_chars == 0) {
+      printf("EOF.\n");
+      return -1;
+    }
+
     if (read_chars > 0) { // If characters were read
-      if (buf == FLAG) {
+      if (buf == FLAG) { //If the char is a FLAG
+        //Set frame start to true.
+        if(!ignore_flag) {
+          initial_flag = !initial_flag;
 
-        initial_flag = (initial_flag + 1) % 2;
-
-        if (!initial_flag)
+          //If it is the second flag, then the frame
+          //has ended
+          if (!initial_flag)
           STOP = 1;
+
+          frame[*frame_len] = buf;
+          (*frame_len)++;
+        } else
+          ignore_flag = 0;
+      } else {
+        //If the char is not a flag and
+        //the final flag has not been found
+        //then add it to the frame.
+        if(initial_flag) {
+          frame[*frame_len] = buf;
+          (*frame_len)++;
+        }
       }
-
-      frame[*frame_len] = buf;
-      (*frame_len)++;
-
     } else // If no characters were read or there was an error
       return -1;
   }
@@ -425,7 +453,8 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
 void destuff(char *packet, char *destuffed, int *packet_len) {
   int destuff_iterator = 0;
 
-  for (int i = 0; i < *packet_len; i++) {
+  int i;
+  for (i = 0; i < *packet_len; i++) {
     if (packet[i] == ESCAPE) {
       destuffed[destuff_iterator] = packet[i + 1] ^ STUFFING_BYTE;
       i++;
@@ -461,7 +490,7 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
 
   connection_timeouts = 0;
   while (connection_timeouts < ACCEPTABLE_TIMEOUTS) {
-    if (write_to_tty(fd, frame, len) == -1) {
+    if (write_to_tty(fd, frame, len)) {
       printf("Failed write.\n");
       return -1;
     }
@@ -473,6 +502,11 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
       alarm(0);
       if (is_reply_valid(reply))
         break;
+
+    } else {
+      printf("Error reading.\n");
+      alarm(0);
+      return -1;
     }
 
     if (connection_timeouts > 0)
@@ -481,10 +515,9 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
   }
 
   alarm(0);
-  if (connection_timeouts == ACCEPTABLE_TIMEOUTS) {
-    printf("Connection timed out.\n");
+  if (connection_timeouts == ACCEPTABLE_TIMEOUTS)
     return -1;
-  } else
+  else
     return 0;
 }
 
@@ -523,14 +556,13 @@ char *stuff(char *packet, int *packet_len) {
   return stuffed;
 }
 
-int has_valid_sequence_number(char control_byte) {
-  static int s = 0;
-
-  if (control_byte ^ (s << 6)) {
-    return 0;
-  } else
-    s = !s;
-  return 1;
+int has_valid_sequence_number(char control_byte, int s) {
+  if (control_byte == (s << 6))
+    return 1;
+   else {
+  printf("Invalid seq num.\n");
+  return 0;
+}
 }
 
 int close_receiver_connection(int fd) {
@@ -554,8 +586,7 @@ int reset_settings(int fd) {
   if (close(fd)) {
     printf("Error closing terminal file descriptor.\n");
     return -1;
-  }
-
+}
   return 0;
 }
 
