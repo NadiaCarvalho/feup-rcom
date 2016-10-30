@@ -168,6 +168,8 @@ int receive_data() {
     }
   } while (packet_len == 0 || packet[0] != (unsigned char)START_PACKET_BYTE);
 
+  printf("Receiving data...\n");
+
   off_t file_size = get_file_size(packet, packet_len);
   char *file_name = get_file_name(packet, packet_len);
   mode_t file_mode = get_file_permissions(packet, packet_len);
