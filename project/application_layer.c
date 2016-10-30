@@ -1,9 +1,5 @@
 #include "application_layer.h"
 
-#define DATA_PACKET_BYTE 1
-#define START_PACKET_BYTE 2
-#define END_PACKET_BYTE 3
-
 #define FILE_SIZE_BYTE 0
 #define FILE_NAME_BYTE 1
 #define FILE_PERMISSIONS_BYTE 2
@@ -30,7 +26,7 @@ int set_up_connection(char *terminal, status stat) {
   }
 
   if ((application.file_descriptor =
-            ll_open(port, application.app_layer_status)) < 0) {
+           ll_open(port, application.app_layer_status)) < 0) {
     printf("application_layer :: set_up_connection() :: ll_open failed\n");
     return -1;
   }
@@ -126,7 +122,7 @@ int send_data(char *path, char *filename) {
   * DATA PACKET
   */
   char data[PACKET_DATA_SIZE];
-  int i;
+  int i = 0;
   off_t bytes_remaining = file_size;
 
   while (bytes_remaining > 0) {
@@ -144,7 +140,12 @@ int send_data(char *path, char *filename) {
     information_packet[3] = read_chars % 256;
 
     memcpy(information_packet + PACKET_HEADER_SIZE, data, read_chars);
-    ll_write(application.file_descriptor, information_packet, packet_size);
+    if(ll_write(application.file_descriptor, information_packet, packet_size) == -1) {
+      printf("Connection lost. Exiting program...\n");
+      close(fd);
+      return -1;
+    }
+
     bytes_remaining -= read_chars;
     i++;
   }
@@ -168,9 +169,9 @@ int receive_data() {
   do {
     if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
       printf("Error ll_read() in function receive_data().\n");
-      return -1;
+      exit(-1);
     }
-  } while (packet[0] != (unsigned char)START_PACKET_BYTE);
+  } while (packet_len == 0 || packet[0] != (unsigned char)START_PACKET_BYTE);
 
   off_t file_size = get_file_size(packet, packet_len);
   char *file_name = get_file_name(packet, packet_len);
@@ -192,20 +193,25 @@ int receive_data() {
   /**
   * Reading and parsing data packets
   */
+  char cur_seq_num = 0;
   if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
     printf("Error ll_read() in function receive_data().\n");
     close(fd);
-    return -1;
+    exit(-1);
   }
 
-  while (packet[0] != (unsigned char)END_PACKET_BYTE) {
-    unsigned int data_len =
-        (unsigned char)packet[2] * 256 + (unsigned char)packet[3];
-    write(fd, packet + 4, data_len);
+  while (packet_len == 0 || packet[0] != (unsigned char)END_PACKET_BYTE) {
+    if (packet_len > 0 && cur_seq_num == packet[1]) {
+      unsigned int data_len =
+          (unsigned char)packet[2] * 256 + (unsigned char)packet[3];
+      write(fd, packet + 4, data_len);
+      cur_seq_num++;
+    }
+
     if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
       printf("Error ll_read() in function receive_data().\n");
       close(fd);
-      return -1;
+      exit(-1);
     }
   }
 

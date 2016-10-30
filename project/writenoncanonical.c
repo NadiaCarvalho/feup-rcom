@@ -35,8 +35,10 @@ int main(int argc, char **argv) {
 
   char path[] = ".";
   char filename[] = "pinguim.gif";
-  send_data(path, filename);
+  if(send_data(path, filename) == -1) 
+    force_close(fd);
+  else
+    ll_close(fd);
 
-  ll_close(fd);
   return 0;
 }
