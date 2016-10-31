@@ -71,7 +71,7 @@ mode_t get_file_permissions(char *packet, int packet_len) {
       * only 2 bytes. As such, we need to read it as a 2 byte int
       * and cast it to mode_t.
       */
-      return *((uint16_t *)(packet + i + 2));
+      return *((mode_t *)(packet + i + 2));
 
     i += 2 + packet[i + 1];
   }
@@ -181,6 +181,9 @@ int receive_data() {
   off_t file_size = get_file_size(packet, packet_len);
   char *file_name = get_file_name(packet, packet_len);
   mode_t file_mode = get_file_permissions(packet, packet_len);
+  printf("Perms: ");
+  print_as_hexadecimal(&file_mode, sizeof(mode_t));
+  printf("\n");
 
   // FIXME: Needed to avoid overwriting current file.
   // Must be removed afterwards.
