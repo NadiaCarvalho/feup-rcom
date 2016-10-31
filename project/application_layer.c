@@ -1,4 +1,5 @@
 #include "application_layer.h"
+#include <errno.h>
 
 #define FILE_SIZE_BYTE 0
 #define FILE_NAME_BYTE 1
@@ -178,17 +179,8 @@ int receive_data() {
   off_t file_size = get_file_size(packet, packet_len);
   char *file_name = get_file_name(packet, packet_len);
   mode_t file_mode = get_file_permissions(packet, packet_len);
-  printf("Perms: ");
-  print_as_hexadecimal(&file_mode, sizeof(mode_t));
-  printf("\n");
 
-  // FIXME: Needed to avoid overwriting current file.
-  // Must be removed afterwards.
-  char temp_fn[strlen(file_name) + 4];
-  strcpy(temp_fn, file_name);
-  strcat(temp_fn, ".gif");
-  int fd = open(temp_fn, O_WRONLY | O_CREAT | O_TRUNC, file_mode);
-  // int fd = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, file_mode);
+  int fd = open(file_name, O_WRONLY | O_CREAT | O_TRUNC);
 
   if (fd < 0) {
     printf("Error opening file. Exiting...\n");
@@ -226,5 +218,6 @@ int receive_data() {
          file_info.st_size);
 
   close(fd);
+  chmod(file_name, file_mode);
   return 0;
 }
