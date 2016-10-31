@@ -17,6 +17,7 @@ volatile int STOP = 0;
 struct termios old_port_settings;
 int connection_timeouts = 0;
 int ignore_flag = 0;
+char r = 0;
 
 struct {
   char port[20]; /* Serial port device e.g. /dev/ttyS0 */
@@ -31,11 +32,13 @@ struct {
 //'Private' functions
 int write_to_tty(int fd, char *buf, int buf_length);
 int read_from_tty(int fd, char *frame, int *frame_len);
-int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *));
+int send_US_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *));
+int send_I_frame(int fd, char *frame, int len);
 char *create_I_frame(int *frame_len, char *packet, int packet_len);
 char *create_US_frame(int *frame_len, int control_byte);
 int is_frame_UA(char *reply);
-int is_frame_RR(char *reply);
+int is_frame_RR(char *reply, int reply_len);
+int is_frame_REJ(char *reply, int reply_len);
 int is_frame_DISC(char *reply);
 int is_I_frame_header_valid(char *frame, int frame_len);
 void timeout(int signum);
@@ -156,8 +159,8 @@ int ll_open(int port, status stat) {
 
   if (stat == TRANSMITTER) {
     char *frame = create_US_frame(&frame_len, SET);
-    if (send_frame(fd, frame, frame_len, is_frame_UA) == -1) {
-      printf("data_link_layer :: ll_open() :: send_frame failed\n");
+    if (send_US_frame(fd, frame, frame_len, is_frame_UA) == -1) {
+      printf("data_link_layer :: ll_open() :: send_US_frame failed\n");
       close(fd);
       return -1;
     }
@@ -185,10 +188,10 @@ int ll_open(int port, status stat) {
 
 int ll_write(int fd, char *packet, int packet_len) {
   // Writes and checks for validity
-  // Using send_frame
+  // Using send_I_frame
   int frame_len;
   char *frame = create_I_frame(&frame_len, packet, packet_len);
-  return send_frame(fd, frame, frame_len, is_frame_RR);
+  return send_I_frame(fd, frame, frame_len);
 }
 
 /**
@@ -291,7 +294,7 @@ int ll_close(int fd) {
 
   if (data_link.stat == TRANSMITTER) {
     frame = create_US_frame(&frame_len, DISC);
-    if (send_frame(fd, frame, frame_len, is_frame_DISC) != 0) {
+    if (send_US_frame(fd, frame, frame_len, is_frame_DISC) != 0) {
       printf("Couldn't send frame on ll_close().\n");
       reset_settings(fd);
       return -1;
@@ -421,11 +424,6 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
   while (!STOP) {                   /* loop for input */
     read_chars = read(fd, &buf, 1); /* returns after x chars have been input */
 
-    if (read_chars == 0) {
-      printf("EOF.\n");
-      return -1;
-    }
-
     if (read_chars > 0) { // If characters were read
       if (buf == FLAG) { //If the char is a FLAG
         //Set frame start to true.
@@ -450,8 +448,10 @@ int read_from_tty(int fd, char *frame, int *frame_len) {
           (*frame_len)++;
         }
       }
-    } else // If no characters were read or there was an error
+    } else {// If no characters were read or there was an error
+      //printf("Error!!! %s\n", strerror(errno));
       return -1;
+    }
   }
 
   return 0;
@@ -489,14 +489,45 @@ int is_frame_DISC(char *reply) {
 
 // is_reply_valid is a function that checks if the reply received is
 // valid.
-// If it is, the send_frame ends correctly. If not, it continues its
+// If it is, the send_US_frame ends correctly. If not, it continues its
 // loop.
-int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
+int send_US_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
   char reply[255];
   int reply_len;
 
   connection_timeouts = 0;
-  while (connection_timeouts < ACCEPTABLE_TIMEOUTS) {
+  while (connection_timeouts <= ACCEPTABLE_TIMEOUTS + 1) {
+    if (write_to_tty(fd, frame, len)) {
+      printf("Failed write.\n");
+      return -1;
+    }
+
+    alarm(3);
+
+    if (read_from_tty(fd, reply, &reply_len) == 0) {
+      connection_timeouts = 0;
+      // If the read() was successful
+      if (is_reply_valid(reply)) {
+          alarm(0);
+          return 0;
+      }
+    }
+
+    alarm(0);
+    if (connection_timeouts > 0 && connection_timeouts < ACCEPTABLE_TIMEOUTS)
+    printf("Connection failed. Retrying %d out of %d...\n",
+    connection_timeouts, ACCEPTABLE_TIMEOUTS);
+  }
+
+  return -1;
+}
+
+int send_I_frame(int fd, char *frame, int len) {
+  char reply[255];
+  int reply_len;
+
+  connection_timeouts = 0;
+  while (connection_timeouts <= ACCEPTABLE_TIMEOUTS + 1) {
     if (write_to_tty(fd, frame, len)) {
       printf("Failed write.\n");
       return -1;
@@ -506,36 +537,54 @@ int send_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
 
     if (read_from_tty(fd, reply, &reply_len) == 0) {
       // If the read() was successful
-      alarm(0);
-      if (is_reply_valid(reply))
-        break;
+      if(connection_timeouts > 0)
+      printf("Connection reestablished. Resuming...\n");
 
-    } else {
-      printf("Error reading.\n");
-      alarm(0);
-      return -1;
+      connection_timeouts = 0;
+
+      // If a RR is received, proceed to the next frame
+      if (is_frame_RR(reply, reply_len)) {
+          r = !r;
+          alarm(0);
+          return 0;
+      } else if(is_frame_REJ(reply, reply_len)) {
+        // If a REJ is received, resend the frame.
+        alarm(0);
+        connection_timeouts = 0;
+      }
     }
 
-    if (connection_timeouts > 0)
+    if (connection_timeouts > 0 && connection_timeouts <= ACCEPTABLE_TIMEOUTS)
       printf("Connection failed. Retrying %d out of %d...\n",
-             connection_timeouts, ACCEPTABLE_TIMEOUTS);
+        connection_timeouts, ACCEPTABLE_TIMEOUTS);
+    alarm(0);
   }
 
-  alarm(0);
-  if (connection_timeouts == ACCEPTABLE_TIMEOUTS)
-    return -1;
-  else
-    return 0;
+  return -1;
 }
 
-int is_frame_RR(char *reply) {
-  static char r = 1;
-  r = !r;
+int is_frame_RR(char *reply, int reply_len) {
+  if(reply_len != 5)
+    return 0;
+
   return (
       reply[0] == (unsigned char)FLAG &&
       reply[1] ==
           (unsigned char)((data_link.stat == TRANSMITTER) ? SEND : RECEIVE) &&
       (unsigned char)reply[2] == (unsigned char)(r << 7 | RR) &&
+      (unsigned char)reply[3] == (unsigned char)(reply[1] ^ reply[2]) &&
+      reply[4] == (unsigned char)FLAG);
+}
+
+int is_frame_REJ(char *reply, int reply_len) {
+  if(reply_len != 5)
+    return 0;
+
+  return (
+      reply[0] == (unsigned char)FLAG &&
+      reply[1] ==
+          (unsigned char)((data_link.stat == TRANSMITTER) ? SEND : RECEIVE) &&
+      (unsigned char)reply[2] == (unsigned char)(r << 7 | REJ) &&
       (unsigned char)reply[3] == (unsigned char)(reply[1] ^ reply[2]) &&
       reply[4] == (unsigned char)FLAG);
 }
@@ -570,7 +619,7 @@ int has_valid_sequence_number(char control_byte, int s) {
 int close_receiver_connection(int fd) {
   int frame_len = 0;
   char *frame = create_US_frame(&frame_len, DISC);
-  if (send_frame(fd, frame, frame_len, is_frame_UA) != 0) {
+  if (send_US_frame(fd, frame, frame_len, is_frame_UA) != 0) {
     printf("Couldn't send frame on ll_close().\n");
     return -1;
   }
