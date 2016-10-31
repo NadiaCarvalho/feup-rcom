@@ -26,8 +26,8 @@ int set_up_connection(char *terminal, status stat) {
   }
 
   if ((application.file_descriptor =
-           ll_open(port, application.app_layer_status)) < 0) {
-    printf("application_layer :: set_up_connection() :: ll_open failed\n");
+           llopen(port, application.app_layer_status)) < 0) {
+    printf("application_layer :: set_up_connection() :: llopen failed\n");
     return -1;
   }
 
@@ -116,7 +116,7 @@ int send_data(char *path, char *filename) {
   start_packet[7 + sizeof(file_info.st_size)] = FILE_NAME_BYTE;
   start_packet[8 + sizeof(file_info.st_size)] = filename_len;
   strcat(start_packet + 9 + sizeof(file_info.st_size), filename);
-  ll_write(application.file_descriptor, start_packet, start_packet_len);
+  llwrite(application.file_descriptor, start_packet, start_packet_len);
 
   /*
   * DATA PACKET
@@ -140,7 +140,7 @@ int send_data(char *path, char *filename) {
     information_packet[3] = read_chars % 256;
 
     memcpy(information_packet + PACKET_HEADER_SIZE, data, read_chars);
-    if(ll_write(application.file_descriptor, information_packet, packet_size) == -1) {
+    if(llwrite(application.file_descriptor, information_packet, packet_size) == -1) {
       printf("Connection lost. Exiting program...\n");
       close(fd);
       return -1;
@@ -154,7 +154,7 @@ int send_data(char *path, char *filename) {
   * END PACKET
   */
   char end_packet[] = {END_PACKET_BYTE};
-  ll_write(application.file_descriptor, end_packet, 1);
+  llwrite(application.file_descriptor, end_packet, 1);
   close(fd);
   return 0;
 }
@@ -167,8 +167,8 @@ int receive_data() {
   * Reading and parsing start packet
   */
   do {
-    if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
-      printf("Error ll_read() in function receive_data().\n");
+    if (llread(application.file_descriptor, packet, &packet_len) != 0) {
+      printf("Error llread() in function receive_data().\n");
       exit(-1);
     }
   } while (packet_len == 0 || packet[0] != (unsigned char)START_PACKET_BYTE);
@@ -196,8 +196,8 @@ int receive_data() {
   * Reading and parsing data packets
   */
   char cur_seq_num = 0;
-  if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
-    printf("Error ll_read() in function receive_data().\n");
+  if (llread(application.file_descriptor, packet, &packet_len) != 0) {
+    printf("Error llread() in function receive_data().\n");
     close(fd);
     exit(-1);
   }
@@ -210,8 +210,8 @@ int receive_data() {
       cur_seq_num++;
     }
 
-    if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
-      printf("Error ll_read() in function receive_data().\n");
+    if (llread(application.file_descriptor, packet, &packet_len) != 0) {
+      printf("Error llread() in function receive_data().\n");
       close(fd);
       exit(-1);
     }
