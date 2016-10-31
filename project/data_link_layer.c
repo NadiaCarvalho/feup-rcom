@@ -279,10 +279,9 @@ int ll_read(int fd, char *packet, int *packet_len) {
       }
   }
 
-  if(!read_succesful) {
+  if(!read_succesful) 
     ignore_flag = 1;
-    printf("Ignoring next flag...\n");
-  }
+
 
 }
 
