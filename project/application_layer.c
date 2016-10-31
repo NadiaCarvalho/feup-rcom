@@ -153,7 +153,7 @@ int send_data(char *path, char *filename) {
   /*
   * END PACKET
   */
-  char end_packet[] = {3};
+  char end_packet[] = {END_PACKET_BYTE};
   ll_write(application.file_descriptor, end_packet, 1);
   close(fd);
   return 0;

@@ -96,7 +96,6 @@ int set_terminal_attributes(int fd) {
 }
 
 int is_I_frame_header_valid(char *frame, int frame_len) {
-
   if (frame_len < 6)
     return 0;
 
@@ -248,18 +247,26 @@ int ll_read(int fd, char *packet, int *packet_len) {
         /* Only need to check sequence number if packet is a data packet.
         * If it is, and the sequence number is invalid, discard the packet
         * by setting its length to 0 */
-        if (!has_valid_sequence_number(frame[2], s))
+        if (!has_valid_sequence_number(frame[2], s)) {
           *packet_len = 0;
+          printf("Found duplicate frame. Discarding...\n");
+        } else {
+          //Only flip sequence number if the whole frame is valid
+          //And not a duplicate.
+          s = !s;
+        }
 
         read_succesful = 1;
       } else { // BCC2 does not match -> check sequence number
-        if (has_valid_sequence_number(frame[2], s))  // new frame, request retry
+        if (has_valid_sequence_number(frame[2], s)) { // new frame, request retry
           reply = create_US_frame(&reply_len, REJ);
-         else {
+          printf("Found new incorrect frame. Rejecting...\n");
+        } else {
           reply = create_US_frame(&reply_len,
                                   RR); // duplicate frame, send RR and discard
           read_succesful = 1;
           *packet_len = 0;
+          printf("Found duplicate frame. Discarding...\n");
         }
       }
 
@@ -267,14 +274,14 @@ int ll_read(int fd, char *packet, int *packet_len) {
         printf("Error write_to_tty() in function ll_read().\n");
         return -1;
       }
-
-      if(!read_succesful) {
-        printf("Found invalid frame!\n");
-        ignore_flag = 1;
-      } else //Only flip sequence number if the whole frame is valid.
-        s = !s;
-    }
   }
+
+  if(!read_succesful) {
+    ignore_flag = 1;
+    printf("Ignoring next flag...\n");
+  }
+
+}
 
   return 0;
 }
@@ -557,12 +564,7 @@ char *stuff(char *packet, int *packet_len) {
 }
 
 int has_valid_sequence_number(char control_byte, int s) {
-  if (control_byte == (s << 6))
-    return 1;
-   else {
-  printf("Invalid seq num.\n");
-  return 0;
-}
+  return (control_byte == (s << 6));
 }
 
 int close_receiver_connection(int fd) {
