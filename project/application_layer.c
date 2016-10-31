@@ -103,19 +103,22 @@ int send_data(char *path, char *filename) {
   /*
   * START PACKET
   */
-  int start_packet_len = 9 + sizeof(file_info.st_size) + filename_len;
+  int start_packet_len = 7 + sizeof(mode_t) + sizeof(file_info.st_size) + filename_len;
   char *start_packet = (char *)malloc(sizeof(char) * start_packet_len);
   start_packet[0] = START_PACKET_BYTE;
   start_packet[1] = FILE_PERMISSIONS_BYTE;
-  start_packet[2] = 2;
+  start_packet[2] = sizeof(mode_t);
   *((mode_t *)(start_packet + 3)) = file_mode;
+  printf("Perms: ");
+  print_as_hexadecimal(start_packet+3, sizeof(mode_t));
+  printf("\n");
 
-  start_packet[5] = FILE_SIZE_BYTE;
-  start_packet[6] = sizeof(file_info.st_size);
-  *((off_t *)(start_packet + 7)) = file_size;
-  start_packet[7 + sizeof(file_info.st_size)] = FILE_NAME_BYTE;
-  start_packet[8 + sizeof(file_info.st_size)] = filename_len;
-  strcat(start_packet + 9 + sizeof(file_info.st_size), filename);
+  start_packet[3 + sizeof(mode_t)] = FILE_SIZE_BYTE;
+  start_packet[4 + sizeof(mode_t)] = sizeof(file_info.st_size);
+  *((off_t *)(start_packet + 5 + sizeof(mode_t))) = file_size;
+  start_packet[5 + sizeof(mode_t) + sizeof(file_info.st_size)] = FILE_NAME_BYTE;
+  start_packet[6 + sizeof(mode_t) + sizeof(file_info.st_size)] = filename_len;
+  strcat(start_packet + 7 + sizeof(mode_t) + sizeof(file_info.st_size), filename);
   llwrite(application.file_descriptor, start_packet, start_packet_len);
 
   /*
