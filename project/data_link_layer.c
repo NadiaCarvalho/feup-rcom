@@ -279,7 +279,7 @@ int ll_read(int fd, char *packet, int *packet_len) {
       }
   }
 
-  if(!read_succesful) 
+  if(!read_succesful)
     ignore_flag = 1;
 
 
@@ -541,14 +541,13 @@ int send_I_frame(int fd, char *frame, int len) {
 
       connection_timeouts = 0;
 
+      alarm(0);
       // If a RR is received, proceed to the next frame
       if (is_frame_RR(reply, reply_len)) {
           r = !r;
-          alarm(0);
           return 0;
       } else if(is_frame_REJ(reply, reply_len)) {
         // If a REJ is received, resend the frame.
-        alarm(0);
         connection_timeouts = 0;
       }
     }
