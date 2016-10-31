@@ -109,9 +109,6 @@ int send_data(char *path, char *filename) {
   start_packet[1] = FILE_PERMISSIONS_BYTE;
   start_packet[2] = sizeof(mode_t);
   *((mode_t *)(start_packet + 3)) = file_mode;
-  printf("Perms: ");
-  print_as_hexadecimal(start_packet+3, sizeof(mode_t));
-  printf("\n");
 
   start_packet[3 + sizeof(mode_t)] = FILE_SIZE_BYTE;
   start_packet[4 + sizeof(mode_t)] = sizeof(file_info.st_size);
