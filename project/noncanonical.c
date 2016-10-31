@@ -33,6 +33,6 @@ int main(int argc, char **argv) {
 
   receive_data();
 
-  ll_close(fd);
+  llclose(fd);
   return 0;
 }

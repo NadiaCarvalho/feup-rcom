@@ -37,27 +37,27 @@ typedef enum { TRANSMITTER, RECEIVER } status;
 * Returns the according file descriptor on success,
 * returning -1 otherwise.
 */
-int ll_open(int port, status stat);
+int llopen(int port, status stat);
 
 /**
 * Writes the given msg with len length to the
 * given fd.
 * Returns -1 on error.
 */
-int ll_write(int fd, char *msg, int len);
+int llwrite(int fd, char *msg, int len);
 
 /**
 * Reads the message from fd and places it on
 * msg, updating len accordingly.
 * Returns -1 on error.
 */
-int ll_read(int fd, char *msg, int *packet_len);
+int llread(int fd, char *msg, int *packet_len);
 
 /**
 * Closes the given fd and sets the port settings.
 * Returns -1 on error.
 */
-int ll_close(int fd);
+int llclose(int fd);
 
 /**
 * Closes the given fd and resets the port settings.
