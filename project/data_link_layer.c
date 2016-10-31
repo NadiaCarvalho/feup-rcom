@@ -111,7 +111,7 @@ int is_I_frame_header_valid(char *frame, int frame_len) {
 * if stat == TRANSMITTER -> send SET, receive UA
 * reverse if stat == RECEIVE
 */
-int ll_open(int port, status stat) {
+int llopen(int port, status stat) {
 
   int fd; // value to be returned
   int frame_len;
@@ -126,12 +126,12 @@ int ll_open(int port, status stat) {
     break;
 
   default:
-    printf("data_link_layer :: ll_open() :: invalid port!\n");
+    printf("data_link_layer :: llopen() :: invalid port!\n");
     return -1;
   }
 
   if (stat != TRANSMITTER && stat != RECEIVER) {
-    printf("data_link_layer :: ll_open() :: Invalid status.\n");
+    printf("data_link_layer :: llopen() :: Invalid status.\n");
     return -1;
   }
 
@@ -145,7 +145,7 @@ int ll_open(int port, status stat) {
   }
 
   if (set_terminal_attributes(fd) != 0) {
-    printf("Error set_terminal_attributes() in function ll_open().\n");
+    printf("Error set_terminal_attributes() in function llopen().\n");
     return -1;
   }
 
@@ -160,7 +160,7 @@ int ll_open(int port, status stat) {
   if (stat == TRANSMITTER) {
     char *frame = create_US_frame(&frame_len, SET);
     if (send_US_frame(fd, frame, frame_len, is_frame_UA) == -1) {
-      printf("data_link_layer :: ll_open() :: send_US_frame failed\n");
+      printf("data_link_layer :: llopen() :: send_US_frame failed\n");
       close(fd);
       return -1;
     }
@@ -169,24 +169,24 @@ int ll_open(int port, status stat) {
     char msg[255];
     int msg_len;
     if (read_from_tty(fd, msg, &msg_len) == -1) {
-      printf("Error read_from_tty() in function ll_open().\n");
+      printf("Error read_from_tty() in function llopen().\n");
       return -1;
     }
 
     char *frame = create_US_frame(&frame_len, UA);
     if (write_to_tty(fd, frame, frame_len) == -1) {
-      printf("Error write_to_tty() in function ll_open().\n");
+      printf("Error write_to_tty() in function llopen().\n");
       return -1;
     }
   }
 
-  printf("data_link_layer :: ll_open() :: connection succesfully "
+  printf("data_link_layer :: llopen() :: connection succesfully "
          "established.\n");
 
   return fd;
 }
 
-int ll_write(int fd, char *packet, int packet_len) {
+int llwrite(int fd, char *packet, int packet_len) {
   // Writes and checks for validity
   // Using send_I_frame
   int frame_len;
@@ -199,7 +199,7 @@ int ll_write(int fd, char *packet, int packet_len) {
 * it is not a duplicate
 * After the check, send the appropriate response to the TRANSMITTER
 */
-int ll_read(int fd, char *packet, int *packet_len) {
+int llread(int fd, char *packet, int *packet_len) {
   char *reply;
   int reply_len;
 
@@ -274,7 +274,7 @@ int ll_read(int fd, char *packet, int *packet_len) {
       }
 
       if (write_to_tty(fd, reply, reply_len) != 0) {
-        printf("Error write_to_tty() in function ll_read().\n");
+        printf("Error write_to_tty() in function llread().\n");
         return -1;
       }
   }
@@ -287,20 +287,20 @@ int ll_read(int fd, char *packet, int *packet_len) {
 
   return 0;
 }
-int ll_close(int fd) {
+int llclose(int fd) {
   char *frame;
   int frame_len = 0;
 
   if (data_link.stat == TRANSMITTER) {
     frame = create_US_frame(&frame_len, DISC);
     if (send_US_frame(fd, frame, frame_len, is_frame_DISC) != 0) {
-      printf("Couldn't send frame on ll_close().\n");
+      printf("Couldn't send frame on llclose().\n");
       reset_settings(fd);
       return -1;
     }
 
     if (write_to_tty(fd, create_US_frame(&frame_len, UA), frame_len) != 0) {
-      printf("Couldn't write to tty on ll_close()\n");
+      printf("Couldn't write to tty on llclose()\n");
       reset_settings(fd);
       return -1;
     }
@@ -310,7 +310,7 @@ int ll_close(int fd) {
     int msg_len = 0;
 
     if (read_from_tty(fd, msg, &msg_len) != 0) {
-      printf("Couldn't read from tty on ll_close()\n");
+      printf("Couldn't read from tty on llclose()\n");
       reset_settings(fd);
       return -1;
     }
@@ -618,7 +618,7 @@ int close_receiver_connection(int fd) {
   int frame_len = 0;
   char *frame = create_US_frame(&frame_len, DISC);
   if (send_US_frame(fd, frame, frame_len, is_frame_UA) != 0) {
-    printf("Couldn't send frame on ll_close().\n");
+    printf("Couldn't send frame on llclose().\n");
     return -1;
   }
 

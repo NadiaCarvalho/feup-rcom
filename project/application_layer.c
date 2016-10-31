@@ -1,4 +1,5 @@
 #include "application_layer.h"
+#include <errno.h>
 
 #define FILE_SIZE_BYTE 0
 #define FILE_NAME_BYTE 1
@@ -26,8 +27,8 @@ int set_up_connection(char *terminal, status stat) {
   }
 
   if ((application.file_descriptor =
-           ll_open(port, application.app_layer_status)) < 0) {
-    printf("application_layer :: set_up_connection() :: ll_open failed\n");
+           llopen(port, application.app_layer_status)) < 0) {
+    printf("application_layer :: set_up_connection() :: llopen failed\n");
     return -1;
   }
 
@@ -71,7 +72,7 @@ mode_t get_file_permissions(char *packet, int packet_len) {
       * only 2 bytes. As such, we need to read it as a 2 byte int
       * and cast it to mode_t.
       */
-      return *((uint16_t *)(packet + i + 2));
+      return *((mode_t *)(packet + i + 2));
 
     i += 2 + packet[i + 1];
   }
@@ -103,20 +104,20 @@ int send_data(char *path, char *filename) {
   /*
   * START PACKET
   */
-  int start_packet_len = 9 + sizeof(file_info.st_size) + filename_len;
+  int start_packet_len = 7 + sizeof(mode_t) + sizeof(file_info.st_size) + filename_len;
   char *start_packet = (char *)malloc(sizeof(char) * start_packet_len);
   start_packet[0] = START_PACKET_BYTE;
   start_packet[1] = FILE_PERMISSIONS_BYTE;
-  start_packet[2] = 2;
+  start_packet[2] = sizeof(mode_t);
   *((mode_t *)(start_packet + 3)) = file_mode;
 
-  start_packet[5] = FILE_SIZE_BYTE;
-  start_packet[6] = sizeof(file_info.st_size);
-  *((off_t *)(start_packet + 7)) = file_size;
-  start_packet[7 + sizeof(file_info.st_size)] = FILE_NAME_BYTE;
-  start_packet[8 + sizeof(file_info.st_size)] = filename_len;
-  strcat(start_packet + 9 + sizeof(file_info.st_size), filename);
-  ll_write(application.file_descriptor, start_packet, start_packet_len);
+  start_packet[3 + sizeof(mode_t)] = FILE_SIZE_BYTE;
+  start_packet[4 + sizeof(mode_t)] = sizeof(file_info.st_size);
+  *((off_t *)(start_packet + 5 + sizeof(mode_t))) = file_size;
+  start_packet[5 + sizeof(mode_t) + sizeof(file_info.st_size)] = FILE_NAME_BYTE;
+  start_packet[6 + sizeof(mode_t) + sizeof(file_info.st_size)] = filename_len;
+  strcat(start_packet + 7 + sizeof(mode_t) + sizeof(file_info.st_size), filename);
+  llwrite(application.file_descriptor, start_packet, start_packet_len);
 
   /*
   * DATA PACKET
@@ -140,7 +141,7 @@ int send_data(char *path, char *filename) {
     information_packet[3] = read_chars % 256;
 
     memcpy(information_packet + PACKET_HEADER_SIZE, data, read_chars);
-    if(ll_write(application.file_descriptor, information_packet, packet_size) == -1) {
+    if(llwrite(application.file_descriptor, information_packet, packet_size) == -1) {
       printf("Connection lost. Exiting program...\n");
       close(fd);
       return -1;
@@ -154,7 +155,7 @@ int send_data(char *path, char *filename) {
   * END PACKET
   */
   char end_packet[] = {END_PACKET_BYTE};
-  ll_write(application.file_descriptor, end_packet, 1);
+  llwrite(application.file_descriptor, end_packet, 1);
   close(fd);
   return 0;
 }
@@ -167,8 +168,8 @@ int receive_data() {
   * Reading and parsing start packet
   */
   do {
-    if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
-      printf("Error ll_read() in function receive_data().\n");
+    if (llread(application.file_descriptor, packet, &packet_len) != 0) {
+      printf("Error llread() in function receive_data().\n");
       exit(-1);
     }
   } while (packet_len == 0 || packet[0] != (unsigned char)START_PACKET_BYTE);
@@ -179,13 +180,7 @@ int receive_data() {
   char *file_name = get_file_name(packet, packet_len);
   mode_t file_mode = get_file_permissions(packet, packet_len);
 
-  // FIXME: Needed to avoid overwriting current file.
-  // Must be removed afterwards.
-  char temp_fn[strlen(file_name) + 4];
-  strcpy(temp_fn, file_name);
-  strcat(temp_fn, ".gif");
-  int fd = open(temp_fn, O_WRONLY | O_CREAT | O_TRUNC, file_mode);
-  // int fd = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, file_mode);
+  int fd = open(file_name, O_WRONLY | O_CREAT | O_TRUNC);
 
   if (fd < 0) {
     printf("Error opening file. Exiting...\n");
@@ -196,8 +191,8 @@ int receive_data() {
   * Reading and parsing data packets
   */
   char cur_seq_num = 0;
-  if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
-    printf("Error ll_read() in function receive_data().\n");
+  if (llread(application.file_descriptor, packet, &packet_len) != 0) {
+    printf("Error llread() in function receive_data().\n");
     close(fd);
     exit(-1);
   }
@@ -210,8 +205,8 @@ int receive_data() {
       cur_seq_num++;
     }
 
-    if (ll_read(application.file_descriptor, packet, &packet_len) != 0) {
-      printf("Error ll_read() in function receive_data().\n");
+    if (llread(application.file_descriptor, packet, &packet_len) != 0) {
+      printf("Error llread() in function receive_data().\n");
       close(fd);
       exit(-1);
     }
@@ -223,5 +218,6 @@ int receive_data() {
          file_info.st_size);
 
   close(fd);
+  chmod(file_name, file_mode);
   return 0;
 }
