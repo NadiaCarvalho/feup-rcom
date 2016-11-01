@@ -11,13 +11,13 @@
 #include <unistd.h>
 
 #define BAUDRATE B9600
-#define ACCEPTABLE_TIMEOUTS 3
 
 volatile int STOP = 0;
 struct termios old_port_settings;
 int connection_timeouts = 0;
 int ignore_flag = 0;
 char r = 0;
+int total_time_outs=0;
 
 struct {
   char port[20]; /* Serial port device e.g. /dev/ttyS0 */
@@ -76,6 +76,7 @@ int set_terminal_attributes(int fd) {
   }
 
   bzero(&new_port_settings, sizeof(new_port_settings));
+
   new_port_settings.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
   new_port_settings.c_iflag = IGNPAR;
   new_port_settings.c_oflag = 0;
@@ -183,6 +184,8 @@ int llopen(int port, status stat) {
   printf("data_link_layer :: llopen() :: connection succesfully "
          "established.\n");
 
+  printf("DATA_LINK values: baud_rate %d,timeout: %d,num_retries: %d.\n",data_link.baud_rate,data_link.timeout,data_link.num_retries);
+
   return fd;
 }
 
@@ -279,14 +282,15 @@ int llread(int fd, char *packet, int *packet_len) {
       }
   }
 
-  if(!read_succesful)
-    ignore_flag = 1;
+    if(!read_succesful)
+      ignore_flag = 1;
 
 
-}
+  }
 
   return 0;
 }
+
 int llclose(int fd) {
   char *frame;
   int frame_len = 0;
@@ -332,7 +336,11 @@ void print_as_hexadecimal(char *msg, int msg_len) {
   fflush(stdout);
 }
 
-void timeout(int signum) { connection_timeouts++; }
+void timeout(int signum) {
+
+  total_time_outs++;
+  connection_timeouts++;
+}
 
 char *create_US_frame(int *frame_len, int control_byte) {
   static char r = 0;
@@ -471,6 +479,7 @@ void destuff(char *packet, char *destuffed, int *packet_len) {
 
   *packet_len = destuff_iterator;
 }
+
 int is_frame_UA(char *reply) {
 
   return (reply[0] == FLAG &&
@@ -495,13 +504,13 @@ int send_US_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
   int reply_len;
 
   connection_timeouts = 0;
-  while (connection_timeouts <= ACCEPTABLE_TIMEOUTS + 1) {
+  while (connection_timeouts <= data_link.num_retries + 1) {
     if (write_to_tty(fd, frame, len)) {
       printf("Failed write.\n");
       return -1;
     }
 
-    alarm(3);
+    alarm(data_link.timeout);
 
     if (read_from_tty(fd, reply, &reply_len) == 0) {
       connection_timeouts = 0;
@@ -513,26 +522,27 @@ int send_US_frame(int fd, char *frame, int len, int (*is_reply_valid)(char *)) {
     }
 
     alarm(0);
-    if (connection_timeouts > 0 && connection_timeouts < ACCEPTABLE_TIMEOUTS)
+    if (connection_timeouts > 0 && connection_timeouts < data_link.num_retries)
     printf("Connection failed. Retrying %d out of %d...\n",
-    connection_timeouts, ACCEPTABLE_TIMEOUTS);
+    connection_timeouts, data_link.num_retries);
   }
 
   return -1;
 }
 
 int send_I_frame(int fd, char *frame, int len) {
+
   char reply[255];
   int reply_len;
 
   connection_timeouts = 0;
-  while (connection_timeouts <= ACCEPTABLE_TIMEOUTS + 1) {
+  while (connection_timeouts <= data_link.num_retries + 1) {
     if (write_to_tty(fd, frame, len)) {
       printf("Failed write.\n");
       return -1;
     }
 
-    alarm(3);
+    alarm(data_link.timeout);
 
     if (read_from_tty(fd, reply, &reply_len) == 0) {
       // If the read() was successful
@@ -552,9 +562,9 @@ int send_I_frame(int fd, char *frame, int len) {
       }
     }
 
-    if (connection_timeouts > 0 && connection_timeouts <= ACCEPTABLE_TIMEOUTS)
+    if (connection_timeouts > 0 && connection_timeouts <= data_link.num_retries)
       printf("Connection failed. Retrying %d out of %d...\n",
-        connection_timeouts, ACCEPTABLE_TIMEOUTS);
+        connection_timeouts, data_link.num_retries);
     alarm(0);
   }
 
@@ -635,12 +645,25 @@ int reset_settings(int fd) {
   if (close(fd)) {
     printf("Error closing terminal file descriptor.\n");
     return -1;
-}
+  }
+
   return 0;
+
 }
 
 void force_close(int fd) {
   printf("Forcing close application...\n");
   reset_settings(fd);
   close(fd);
+}
+
+void init_data_link(int time_out,int number_retries){
+  
+  data_link.timeout=time_out;
+  data_link.num_retries=number_retries;
+
+}
+
+int getTotalTimeouts(){
+  return total_time_outs;
 }

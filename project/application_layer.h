@@ -34,5 +34,9 @@ int receive_data();
 * Writes file to serial port.
 */
 int send_data(char *path, char *filename);
+/**
+* Prints the bar of the readed bytes.
+*/
+void currentstatus(int bytes_readed);
 
 #endif

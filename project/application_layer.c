@@ -8,6 +8,9 @@
 #define PACKET_SIZE 256
 #define PACKET_HEADER_SIZE 4
 #define PACKET_DATA_SIZE PACKET_SIZE - PACKET_HEADER_SIZE
+#define FILE_SIZE 10968
+
+int num_bytes_read=0;
 
 int set_up_connection(char *terminal, status stat) {
   if (stat != TRANSMITTER && stat != RECEIVER) {
@@ -157,6 +160,9 @@ int send_data(char *path, char *filename) {
   char end_packet[] = {END_PACKET_BYTE};
   llwrite(application.file_descriptor, end_packet, 1);
   close(fd);
+
+  printf("Total timeouts: %d.\n",getTotalTimeouts());
+
   return 0;
 }
 
@@ -202,6 +208,10 @@ int receive_data() {
       unsigned int data_len =
           (unsigned char)packet[2] * 256 + (unsigned char)packet[3];
       write(fd, packet + 4, data_len);
+
+      num_bytes_read+=data_len;
+
+      currentstatus(num_bytes_read);
       cur_seq_num++;
     }
 
@@ -219,5 +229,29 @@ int receive_data() {
 
   close(fd);
   chmod(file_name, file_mode);
+
   return 0;
+}
+
+void currentstatus(int bytes_readed){
+
+  printf("]\n\033[F\033[J");
+
+	float perc = ((float)bytes_readed / FILE_SIZE) * 100;
+
+	printf("|");
+
+	float t;
+	for(t = 0; t < perc; t+= 6) {
+		printf("-");
+	}
+
+
+	for(t = 100 - t; t > 0; t -= 6) {
+		printf(" ");
+	}
+
+	printf("|  %.2f %%", perc);
+
+  printf("\n");
 }

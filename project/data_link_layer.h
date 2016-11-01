@@ -14,8 +14,6 @@
 #define RR 0x05
 #define REJ 0x01
 
-#define BAUDRATE B9600
-
 #define COM1 0
 #define COM2 1
 #define COM1_PORT "/dev/ttyS0"
@@ -64,5 +62,15 @@ int llclose(int fd);
 * Should be used when there is a problem with the connection.
 */
 void force_close(int fd);
+
+/**
+* Initialize data_link struct variables.
+*/
+void init_data_link(int time_out,int number_retries);
+
+/**
+* Get the number of timeouts at the end.
+*/
+int getTotalTimeouts();
 
 #endif
