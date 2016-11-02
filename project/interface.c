@@ -97,9 +97,9 @@ void select_parameters(){
 
 int main(int argc, char **argv){
 
-  if ((argc < 2) || ((strcmp("/dev/ttyS0", argv[1]) != 0) &&
-                     (strcmp("/dev/ttyS1", argv[1]) != 0))) {
-    printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+  if ((argc < 2) || ((strcmp("/dev/ttyS0", argv[1]) != 0) &&        // For development at home, a script was used that used both /dev/ttyS0
+                     (strcmp("/dev/ttyS1", argv[1]) != 0))) {       // and /dev/ttyS1, in the lab only /dev/ttyS0 is used on both receiver and transmitter
+    printf("Usage:\tnserial <SerialPort>\n\tex: nserial /dev/ttyS1\n");
     exit(1);
   }
 
