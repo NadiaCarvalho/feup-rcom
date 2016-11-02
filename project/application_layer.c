@@ -211,7 +211,7 @@ int receive_data() {
 
       num_bytes_read+=data_len;
 
-      print_currentstatus(num_bytes_read);
+      print_current_status(num_bytes_read);
       cur_seq_num++;
     }
 
@@ -233,21 +233,31 @@ int receive_data() {
   return 0;
 }
 
-void print_currentstatus(int bytes_read){
+void print_current_status(int bytes_read){
 
-  printf("\r]\n\033[F\033[J");
+  int i = 0;
+  static int count = 0;
+  int n_ellipsis;
+
+  n_ellipsis = count++ % 3;
+  printf("\r\033[3F\033[G\033[J\033[E");
 
 	float perc = ((float)bytes_read / FILE_SIZE) * 100;
 
-	printf("|");
+  printf("Receiving data");
+  while(i++ <= n_ellipsis){
+    printf(".");
+  }
+
+	printf("\n|");
 
 	float t;
-	for(t = 0; t < perc; t+= 6) {
+	for(t = 0; t < perc; t+= 3) {
 		printf("-");
 	}
 
 
-	for(t = 100 - t; t > 0; t -= 6) {
+	for(t = 100 - t; t > 0; t -= 3) {
 		printf(" ");
 	}
 
