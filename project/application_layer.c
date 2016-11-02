@@ -211,7 +211,7 @@ int receive_data() {
 
       num_bytes_read+=data_len;
 
-      currentstatus(num_bytes_read);
+      print_currentstatus(num_bytes_read);
       cur_seq_num++;
     }
 
@@ -233,11 +233,11 @@ int receive_data() {
   return 0;
 }
 
-void currentstatus(int bytes_readed){
+void print_currentstatus(int bytes_read){
 
-  printf("]\n\033[F\033[J");
+  printf("\r]\n\033[F\033[J");
 
-	float perc = ((float)bytes_readed / FILE_SIZE) * 100;
+	float perc = ((float)bytes_read / FILE_SIZE) * 100;
 
 	printf("|");
 
@@ -251,7 +251,6 @@ void currentstatus(int bytes_readed){
 		printf(" ");
 	}
 
-	printf("|  %.2f %%", perc);
-
-  printf("\n");
+	printf("|  %.2f %%\n", perc);
+	fflush(stdout);
 }

@@ -20,37 +20,37 @@ void select_parameters(){
   int temp_time_out;
   int time_out_flag=0;
 
-  printf("Choose the number of times you want to repeat transmission: ");
+  printf("Choose the number of times you want to retry on timeout: ");
 
   do{
 
     scanf("%d",&temp_num_transmissions);
 
     if(temp_num_transmissions > 0 && temp_num_transmissions<=6){
-      printf("Number of times to repeat the transmissions will be %d.\n",temp_num_transmissions);
+      printf("Number of retries will be %d.\n",temp_num_transmissions);
       num_transmissions_flag=1;
     }
     else{
-      printf("\nNot a possible value, choose again [1,...,6]: ");
+      printf("\nInvalid value, choose again [1,...,6]: ");
     }
 
 
   }while(!num_transmissions_flag);
 
 
-  printf("Choose the time out between the retransmissions: ");
+  printf("Choose the time for timeout: ");
 
   do{
 
     scanf("%d",&temp_time_out);
 
     if(temp_time_out > 0 && temp_time_out <=6){
-      printf("Number of time out between the transmissions will be %d.\n",temp_time_out);
+      printf("Timeout between the transmissions will be %d.\n",temp_time_out);
       time_out_flag=1;
     }
     else
     {
-      printf("\nNot a possible value, choose again [1,...,6]: ");
+      printf("\nInvalid value, choose again [1,...,6]: ");
     }
 
   }while(!time_out_flag);
