@@ -19,6 +19,9 @@ void select_parameters(){
   int num_transmissions_flag=0;
   int temp_time_out;
   int time_out_flag=0;
+  int chosen_baudrate;
+  int baudrate_flag = 0;
+  int baudrate;
 
   printf("Choose the number of times you want to retry on timeout: ");
 
@@ -55,7 +58,39 @@ void select_parameters(){
 
   }while(!time_out_flag);
 
-  init_data_link(temp_time_out,temp_num_transmissions);
+
+  printf("Choose Baud Rate:\n1 - B4800\n2 - B9600\n3 - B19200\n\n");
+  do{
+
+    scanf(" %d",&chosen_baudrate);
+
+    if(chosen_baudrate > 0 && chosen_baudrate <= 3){
+      baudrate_flag=1;
+    }
+    else
+    {
+      printf("\nInvalid value, choose again [1,...,6]: ");
+    }
+
+  }while(!baudrate_flag);
+
+  switch(chosen_baudrate){
+    case 1:
+      baudrate = B4800;
+      break;
+
+    case 2:
+      baudrate = B9600;
+      break;
+
+    case 3:
+      baudrate = B19200;
+      break;
+}
+
+  printf("\nBaudrate = %d\n",baudrate);
+
+  init_data_link(temp_time_out,temp_num_transmissions, baudrate);
 
 }
 

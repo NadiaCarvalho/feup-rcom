@@ -27,6 +27,7 @@ struct {
   unsigned int num_retries;  /* Maximum number of retries */
   status stat;
   struct sigaction old_action;
+  int baudrate;
 } data_link;
 
 //'Private' functions
@@ -77,7 +78,7 @@ int set_terminal_attributes(int fd) {
 
   bzero(&new_port_settings, sizeof(new_port_settings));
 
-  new_port_settings.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+  new_port_settings.c_cflag = data_link.baudrate | CS8 | CLOCAL | CREAD;
   new_port_settings.c_iflag = IGNPAR;
   new_port_settings.c_oflag = 0;
 
@@ -657,10 +658,11 @@ void force_close(int fd) {
   close(fd);
 }
 
-void init_data_link(int time_out,int number_retries){
+void init_data_link(int time_out,int number_retries, int baudrate){
   
   data_link.timeout=time_out;
   data_link.num_retries=number_retries;
+  data_link.baudrate = baudrate;
 
 }
 

@@ -66,7 +66,7 @@ void force_close(int fd);
 /**
 * Initialize data_link struct variables.
 */
-void init_data_link(int time_out,int number_retries);
+void init_data_link(int time_out,int number_retries, int baudrate);
 
 /**
 * Get the number of timeouts at the end.
