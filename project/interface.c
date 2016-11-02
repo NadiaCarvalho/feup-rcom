@@ -59,7 +59,7 @@ void select_parameters(){
   }while(!time_out_flag);
 
 
-  printf("Choose Baud Rate:\n1 - B4800\n2 - B9600\n3 - B19200\n\n");
+  printf("Choose Baud Rate:\n1 - B2400\n2 - B4800\n3 - B9600\n\n");
   do{
 
     scanf(" %d",&chosen_baudrate);

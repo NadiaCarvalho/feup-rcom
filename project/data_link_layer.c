@@ -320,7 +320,7 @@ int llclose(int fd) {
       return -1;
     }
 
-    if (is_frame_DISC(msg))
+    if (is_frame_DISC(msg)){
       close_receiver_connection(fd);
   }
 
@@ -659,7 +659,7 @@ void force_close(int fd) {
 }
 
 void init_data_link(int time_out,int number_retries, int baudrate){
-  
+
   data_link.timeout=time_out;
   data_link.num_retries=number_retries;
   data_link.baudrate = baudrate;
