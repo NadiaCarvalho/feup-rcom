@@ -8,6 +8,9 @@
 #define PACKET_SIZE 256
 #define PACKET_HEADER_SIZE 4
 #define PACKET_DATA_SIZE PACKET_SIZE - PACKET_HEADER_SIZE
+#define FILE_SIZE 10968
+
+int num_bytes_read=0;
 
 int set_up_connection(char *terminal, status stat) {
   if (stat != TRANSMITTER && stat != RECEIVER) {
@@ -147,9 +150,13 @@ int send_data(char *path, char *filename) {
       return -1;
     }
 
+    print_current_status(file_size - bytes_remaining, file_size, TRANSMITTER);
+
     bytes_remaining -= read_chars;
     i++;
   }
+
+  print_current_status(file_size - bytes_remaining, file_size, TRANSMITTER);
 
   /*
   * END PACKET
@@ -157,6 +164,9 @@ int send_data(char *path, char *filename) {
   char end_packet[] = {END_PACKET_BYTE};
   llwrite(application.file_descriptor, end_packet, 1);
   close(fd);
+
+  printf("Total timeouts: %d.\n",getTotalTimeouts());
+
   return 0;
 }
 
@@ -202,6 +212,10 @@ int receive_data() {
       unsigned int data_len =
           (unsigned char)packet[2] * 256 + (unsigned char)packet[3];
       write(fd, packet + 4, data_len);
+
+      num_bytes_read+=data_len;
+
+      print_current_status(num_bytes_read, file_size, RECEIVER);
       cur_seq_num++;
     }
 
@@ -219,5 +233,38 @@ int receive_data() {
 
   close(fd);
   chmod(file_name, file_mode);
+
   return 0;
+}
+
+void print_current_status(size_t elapsed_bytes, size_t total_bytes, int status){
+
+  int i = 0;
+  static int count = 0;
+  int n_ellipsis;
+
+  n_ellipsis = count++ % 3;
+  printf("\r\033[3F\033[G\033[J\033[E");
+
+	float perc = ((float)elapsed_bytes / total_bytes) * 100;
+
+  status == TRANSMITTER ? printf("Sending data") : printf("Receiving data");
+  while(i++ <= n_ellipsis){
+    printf(".");
+  }
+
+	printf("\n|");
+
+	float t;
+	for(t = 0; t < perc; t+= 3) {
+		printf("-");
+	}
+
+
+	for(t = 100 - t; t > 0; t -= 3) {
+		printf(" ");
+	}
+
+	printf("|  %.2f %%\n", perc);
+	fflush(stdout);
 }
