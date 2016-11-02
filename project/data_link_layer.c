@@ -322,10 +322,11 @@ int llclose(int fd) {
 
     if (is_frame_DISC(msg)){
       close_receiver_connection(fd);
-  }
+    }
 
-  if (reset_settings(fd) == 0)
-    printf("Connection succesfully closed.\n");
+    if (reset_settings(fd) == 0)
+        printf("Connection succesfully closed.\n");
+    }
 
   return 0;
 }
