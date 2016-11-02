@@ -150,6 +150,8 @@ int send_data(char *path, char *filename) {
       return -1;
     }
 
+    print_current_status(file_size - bytes_remaining, file_size, TRANSMITTER);
+
     bytes_remaining -= read_chars;
     i++;
   }
@@ -211,7 +213,7 @@ int receive_data() {
 
       num_bytes_read+=data_len;
 
-      print_current_status(num_bytes_read);
+      print_current_status(num_bytes_read, file_size, RECEIVER);
       cur_seq_num++;
     }
 
@@ -233,7 +235,7 @@ int receive_data() {
   return 0;
 }
 
-void print_current_status(int bytes_read){
+void print_current_status(size_t elapsed_bytes, size_t total_bytes, int status){
 
   int i = 0;
   static int count = 0;
@@ -242,9 +244,9 @@ void print_current_status(int bytes_read){
   n_ellipsis = count++ % 3;
   printf("\r\033[3F\033[G\033[J\033[E");
 
-	float perc = ((float)bytes_read / FILE_SIZE) * 100;
+	float perc = ((float)elapsed_bytes / total_bytes) * 100;
 
-  printf("Receiving data");
+  status == TRANSMITTER ? printf("Sending data") : printf("Receiving data");
   while(i++ <= n_ellipsis){
     printf(".");
   }

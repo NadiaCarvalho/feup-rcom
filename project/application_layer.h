@@ -37,6 +37,6 @@ int send_data(char *path, char *filename);
 /**
 * Prints the bar of the readed bytes.
 */
-void print_current_status(int bytes_read);
+void print_current_status(size_t elapsed_bytes, size_t total_bytes, int status);
 
 #endif

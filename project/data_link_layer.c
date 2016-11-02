@@ -184,7 +184,7 @@ int llopen(int port, status stat) {
   printf("data_link_layer :: llopen() :: connection succesfully "
          "established.\n");
 
-  printf("DATA_LINK values: baud_rate %d,timeout: %d,num_retries: %d.\n",data_link.baud_rate,data_link.timeout,data_link.num_retries);
+  printf("DATA_LINK values: baud_rate %d,timeout: %d,num_retries: %d.\n\n\n\n\n",data_link.baud_rate,data_link.timeout,data_link.num_retries);
 
   return fd;
 }

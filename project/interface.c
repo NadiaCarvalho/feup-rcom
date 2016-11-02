@@ -91,7 +91,7 @@ int main(int argc, char **argv){
 
   if(strcmp(mode,"R")==0){ //RECEIVER
 
-    printf("ENTER RECEIVER.\n");
+    printf("\nRECEIVER.\n\n");
 
     int fd = set_up_connection(argv[1], RECEIVER);
 
@@ -106,7 +106,7 @@ int main(int argc, char **argv){
 
   } else if(strcmp(mode,"T")==0){ //TRANSMITTER
 
-    printf("ENTER TRANSMITTER.\n");
+    printf("\nTRANSMITTER.\n\n");
 
     int fd = set_up_connection(argv[1], TRANSMITTER);
 
