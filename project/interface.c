@@ -69,7 +69,7 @@ void select_parameters(){
     }
     else
     {
-      printf("\nInvalid value, choose again [1,...,6]: ");
+      printf("\nInvalid value, choose again [1,...,3]: ");
     }
 
   }while(!baudrate_flag);
