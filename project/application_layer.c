@@ -156,6 +156,8 @@ int send_data(char *path, char *filename) {
     i++;
   }
 
+  print_current_status(file_size - bytes_remaining, file_size, TRANSMITTER);
+
   /*
   * END PACKET
   */

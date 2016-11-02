@@ -76,19 +76,20 @@ void select_parameters(){
 
   switch(chosen_baudrate){
     case 1:
-      baudrate = B4800;
+      baudrate = B2400;
+      printf("Baudrate: B2400\n");
       break;
 
     case 2:
-      baudrate = B9600;
+      baudrate = B4800;
+      printf("Baudrate: B4800\n");
       break;
 
     case 3:
-      baudrate = B19200;
+      baudrate = B9600;
+      printf("Baudrate: B9600\n");
       break;
 }
-
-  printf("\nBaudrate = %d\n",baudrate);
 
   init_data_link(temp_time_out,temp_num_transmissions, baudrate);
 
