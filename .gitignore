@@ -56,5 +56,4 @@ dkms.conf
 
 # Others
 *.h.gch
-project/receive
-project/send
+project/nserial
