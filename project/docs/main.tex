@@ -1,0 +1,251 @@
+\documentclass[11pt]{article}
+
+\usepackage[portuguese]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{indentfirst}
+\usepackage{graphicx}
+\usepackage{verbatim}
+\usepackage{hyperref}
+\usepackage{sidecap}
+\usepackage{listings}
+\usepackage[left=0.9in,right=0.9in,top=1in,bottom=.8in]{geometry}
+
+\lstset{language=C} 
+
+\begin{document}
+
+\setlength{\textwidth}{16cm}
+\setlength{\textheight}{22cm}
+
+\title{\Huge\textbf{\textit{1º Trabalho Laboratorial}}\linebreak\linebreak
+\Large\textbf{Relatório}\linebreak
+\linebreak\linebreak
+\includegraphics[scale=0.1]{res/images/feup-logo.png}\linebreak\linebreak
+\linebreak\linebreak
+\Large{Mestrado Integrado em Engenharia Informática e Computação} \linebreak\linebreak
+\Large{Redes de Computadores}\linebreak
+}
+
+\author{\textbf{Bancada 1 - 3MIEIC07:}\\
+André Reis - up201403057 \\
+Bernardo Ferreira dos Santos Aroso Belchior - up201405381 \\
+Edgar de Lemos Passos - up201404131 \\
+José Pedro Teixeira Monteiro - up201406458 \\
+\linebreak\linebreak \\
+ \\ Faculdade de Engenharia da Universidade do Porto \\ Rua Roberto Frias, s\/n, 4200-465 Porto, Portugal \linebreak\linebreak\linebreak
+\linebreak\linebreak\vspace{1cm}}
+
+\maketitle
+\thispagestyle{empty}
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\section{Sumário}
+
+Este relatório tem como objetivo complementar o primeiro projeto da Unidade Curricular Redes de Computadores. Este projecto consistiu no desenvolvimento de uma aplicação que fosse capaz de transferir ficheiros entre dois computadores ligados por uma porta de série assíncrona. Esta transmissão deveria ser capaz de ultrapassar a introdução de erros na comunicação e a desconexão da ligação.
+
+Este projeto foi cumprido, sendo que foi desenvolvida uma única aplicacao capaz de enviar e receber os dados corretamente e de restabelecer a ligação após qualquer falha.
+
+\newpage
+
+\section{Introdução}
+
+O objetivo deste relatorio e expor os aspetos mais teóricos da realizacao do trabalho, que, dada a sua natureza teórica, não terão sido avaliados na demonstração do projeto.
+
+O objetivo do trabalho era implementar um dado protocolo de ligação de dados, especificado no guião, de forma a fornecer um serviço de comunicação de dados fiável entre dois sistemas ligados por uma porta de série. 
+
+Para isto, foi necessário desenvolver funções de criação e sincronização de tramas (\textit{framing}), estabelecimento e terminação da ligação, numeração de tramas, confirmação de receção de uma trama sem erros e na sequência correta, controlo de erros %inserir exemplos de controlo de erros ? % 
+e de fluxo.
+
+Este relatório será organizado da seguinte forma:
+\begin{itemize}
+\item Arquitetura - Demonstração dos blocos funcionais e interfaces.
+\item Estrutura do Código - Exposição das APIs, principais estruturas de dados, principais funções e a sua relação com a arquitetura.
+\item Casos de Uso Principais - Identificação dos casos de uso principais e sequências de chamada de funções.
+\item Protocolo de Ligação Lógica - Identificação dos principais aspetos funcionais e descrição da estratégia de implementação destes aspetos. % com apresentação de extratos de código - preciso ? %
+\item Protocolo de Aplicação - Identificação dos principais aspetos funcionais; descrição da estratégia de implementação destes aspetos. % com apresentação de extratos de código - preciso ? %
+\item Validação - Descrição dos testes efetuados com apresentação quantificada dos resultados.
+\item Elementos de Valorização - Identificação dos elementos de valorização implementados e descrição da estratégia de implementação. % com apresentação de pequenos extratos de código %
+\item Conclusão - Síntese da informação apresentada anteriormente e reflexão sobre os objetivos de aprendizagem alcançados.
+\end{itemize}
+
+
+\newpage
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Arquitetura e Estrutura do Código}
+
+A nossa aplicação foi desenvolvida com duas principais camadas lógicas, para além da Interface com o utilizador.
+
+Iremos então apresentar estes blocos.
+
+\subsection{Camada de Ligação de Dados \textit{(Data Link Layer)}}
+
+A camada de ligação de dados, desenvolvida nos ficheiros \textit{data\_link\_layer.c} e \textit{data\_link\_layer.h}, é a camada lógica de mais baixo nível na nossa aplicação, funcionando como ponte entre a porta de série e a camada de aplicação. É responsável pela comunicação entre as duas máquinas. Contém, por isso, as funções que configuram, iniciam e terminam a ligação, assim como as que escrevem e lêem dados da porta de série, tratando das necessidades da comunicação - nomeadamente tratamento de erros e \textit{stuffing / destuffing de pacotes}.
+
+Para facilitar o uso de variáveis necessárias à ligação de dados, utilizou-se a seguinte estrutura \textit{data\_link}:
+\lstinputlisting{res/code/data_link_struct.c}
+
+\subsection{Camada de Aplicação \textit{(Application Layer)}}
+
+A camada de aplicação, desenvolvida nos ficheiros \textit{application\_layer.c} e \textit{application\_layer.h} é a camada lógica situada diretamente acima da camada de ligação de dados, servindo de ponte entre esta e a interface com o utilizador. É responsável pela utilização da camada de lógica para comunicar e transferir ficheiros de acordo com os parâmetros que lhe são passados pelo utilizador.
+
+Para facilitar o uso de variáveis necessárias à aplicação, utilizou-se a seguinte estrutura \textit{app\_layer}:
+\lstinputlisting{res/code/app_layer_struct.c}
+
+\subsection{Interface \textit{(Command Line Interface}}
+
+Por fim, o ficheiro \textit{interface.c} contém o código de interação com o utilizador, para recolher os parâmetros de configuração necessários à transferência de dados, como a informação de ser Recetor ou Transmissor de dados, a \textit{Baud Rate}, o número de \textit{timeouts} permitidos e tempo necessário para se considerar um \textit{timeout}.
+
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Casos de Uso Principais}
+
+A aplicação desenvolvida apenas precisa de um parâmetro, o dispositivo de porta de série (normalmente /dev/ttyS0).
+Depois, ao executar, a aplicação pede ao utilizador para inserir alguns outros parâmetros, como o modo de execução (Transmissor ou Recetor), o Baud Rate pretendido, o número máximo de timeouts admissíveis e o tempo para considerar um timeout.
+Após isto, a aplicação vai automaticamente buscar o ficheiro "pinguim.gif" se estiver em modo Transmissor e começa a ligação e a enviar o ficheiro.
+
+Se estiver em modo Recetor, fica à espera que algum Transmissor inicie uma ligação.
+\newpage
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Protocolo de Ligação Lógica}
+
+O protocolo de ligação lógica implementado tem como principais aspetos funcionais:
+\begin{itemize}
+\item Configuração da porta de série;
+\item Estabelecimento de ligação pela porta de série;
+\item Transferência de dados pela porta de série, fazendo \textit{stuffing} e \textit{destuffing} dos mesmos;
+\item Recuperação de erros durante a transferência de dados.
+\end{itemize}
+
+Para isto, foi necessário implementar as funções:
+
+\subsection{llopen() e llclose()}
+
+Estas funções são as necessárias para iniciar e terminar a ligação pela porta de série.
+Para isso a função \textbf{llopen} começa por alterar as configurações da porta de série para as pretendidas. 
+
+Após isto, se a aplicação for Transmissor, cria uma trama \textbf{SET} (\textit{Set Up}) e envia-a. Para isto foi criada uma função \textit{send\_US\_frame()} (envia trama U ou S, pois SET é uma trama US), que enquanto não recebe a resposta pretendida - neste caso \textbf{UA} - activa um alarme com duração definada pelo utilizador e tenta enviar a trama que lhe é passada. Se o alarme for desencadeado, conta como um \textit{timeout} e tenta enviar a trama novamente. Caso o número de \textit{timeouts} máximo permitido for excedido, esta função termina com um estado de erro - informando a função llopen que não conseguiu estabelecer a comunicação com o recetor, retornando -1.
+
+Se a aplicação for Recetor, fica à espera até receber uma trama \textbf{SET}, e quando isto acontece, responde com uma trama \textbf{UA} (\textit{Unnumbered Acknowledgment}), estabelecendo assim, a ligação com sucesso.
+
+A função llclose, do lado do Transmissor, tenta terminar a ligação ao enviar uma trama \textbf{DISC} utilizando a função \textit{send\_US\_frame}, que espera pela resposta do Recetor, terá de ser uma trama \textbf{DISC}. Ao recebê-la, responde com uma trama \textbf{UA}, informando o Recetor que recebeu a sua intenção de finalizar a ligação. Após isto, repõe as configurações anteriores da porta de série e termina com sucesso.
+
+O Recetor espera até receber uma trama \textbf{DISC}, respondendo com uma trama do mesmo tipo. Após transmissão da resposta, espera pela trama \textbf{UA} do Transmissor e repõe as configurações anteriores da porta de série, terminando com sucesso.
+
+\subsection{llwrite() e llread()}
+
+Estas funções são as principais responsáveis pela escrita e leitura de dados no decorrer da aplicação.
+
+A função \textbf{llwrite} recebe um pacote e envia-o pela porta de série depois de o encapsular numa trama \textit{I} (trama de Informação). Para isto criou-se outra função, a \textit{create\_I\_frame} (cria trama do tipo I). Esta função trata de gerar todos os campos da trama \textbf{I} e de fazer o \textit{byte stuffing} necessário.
+
+A função \textbf{llread} espera até receber uma trama. Se for uma trama \textbf{DISC}, então procede ao fecho da ligação estabelecida; senão confere a validade do cabeçalho da trama recebida, rejeitando-a se for inválida (enviando um comando \textbf{REJ}). Caso o cabeçalho seja válido, a função procede com o processo de verificação, fazendo \textit{destuff} ao pacote contido na trama e ao \textit{Block Check Character} correspondente ao pacote. De seguida, confirma se o pacote é válido. Caso o resultado seja afirmativo, envia uma trama \textbf{RR} - mesmo que o pacote seja duplicado. Caso contrário, transmite uma trama \textbf{REJ}, exceto se se tratar de um pacote duplicado, confirmando-o com \textbf{RR}.
+
+\newpage
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Protocolo de Aplicação}
+
+O protocolo de aplicação implementado tem como principais aspetos funcionais:
+\begin{itemize}
+\item Geração e transferência dos pacotes de controlo e de dados;
+\item Leitura e Escrita do ficheiro a transferir.
+\end{itemize}
+
+Para isto, foi necessário implementar as funções:
+\subsection{send\_data() e receive\_data()}
+
+A função \textbf{send\_data} é a função responsável pelo comportamento principal do Transmissor, e envia dados para a camada inferior enviar pela porta de série. 
+
+Para isto, a função começa por criar um pacote de controlo, o \textbf{Start Packet}, que contém a informação codificada em \textbf{TLV}s \textit{(Type, Length, Value)}, isto é, para cada parâmetro a passar nesse pacote, é necessário passar o tipo do parâmetro, depois o seu tamanho e só depois o valor do parâmetro em si. Na aplicação desenvolvida, é passada neste pacote a informação das permissões do ficheiro, do seu nome e do seu tamanho. A função serve-se depois da função da camada inferior \textbf{llwrite} para codificar e enviar este pacote.
+
+Após isto, a função lê o ficheiro que se quer transferir e entra no ciclo principal do programa, em que se vai construindo pacotes de dados com os bytes lidos do ficheiro e enviando esses pacotes com a função \textbf{llwrite}. Quando o ficheiro acaba de ser escrito, a função envia finalmente um \textbf{End Packet} e termina.
+
+
+A função \textbf{receive\_data} é a função responsável pelo comportamento principal do Transmissor, recebe dados da camada inferior para compor o ficheiro lido.
+
+Para isto, a função começa por ler, usando a função \textbf{llread} da camada inferior, o pacote de controlo e daí tirar o nome do ficheiro a ler, as suas permissões e o seu tamanho final.
+Depois, enquanto receber pacotes válidos e que não sejam o \textbf{End Packet}, continua a escrever os bytes de informação vindos de \textbf{llread} para o ficheiro, acabando quando o receber o \textbf{End Packet}.
+
+\newpage
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Validação}
+
+Para verificar a robustez da aplicação desenvolvida, foram aplicados os seguintes testes:
+\begin{itemize}
+\item Enviar um ficheiro;
+\item Enviar um ficheiro, carregar no botão de interrupção durante a transmissão e re-abrindo a transmissão depois;
+\item Enviar um ficheiro e desligar o cabo da porta de série durante a transmissão, voltando a ligar depois;
+\item Enviar um ficheiro e introduzir erros na ligação com o cabo de cobre;
+\item Enviar um ficheiro, interromper a ligação e introduzir erros com o cabo de cobre.
+\end{itemize}
+
+A aplicação foi capaz de superar todos estes testes, verificando-se isto tanto pelos \textit{bytes} do ficheiro estarem correctos como pela demonstração no ecrã do estado do envio e verificação do resultado através do comando \textit{md5sum}.
+
+
+\newpage
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Elementos de Valorização}
+
+Os elementos de valorização implementados foram:
+
+\subsection{Seleção de parâmetros pelo Utilizador}
+
+A interface por linha de comandos permite ao utilizador escolher a \textbf{Baud Rate}, o número máximo de \textit{timeouts} e o tempo de \textit{timeout}.
+
+\subsection{Implementação do REJ}
+
+\lstinputlisting{res/code/rej_impl.c}
+
+\subsection{Verificação da integridade dos dados pela Aplicação}
+
+A aplicação verifica o tamanho dado do ficheiro com o número de bytes de dados recebidos.
+
+\subsection{Registo de ocorrências}
+
+A aplicação regista o número de \textit{timeouts} que aconteceram ao longo da sua execução e imprime esse número no ecrã ao terminar.
+
+\newpage
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusão}
+
+Em geral, pensamos que o objetivo principal deste projeto foi alcançado. Os conceitos necessários para o arrancar deste projeto são um pouco complexos no que toca à aprendizagem, mas sentimos que após a compreensão do essencial, o guião e a documentação cumprem bem o seu papel.
+
+Quanto ao trabalho realizado, fez com que todos os elementos do grupo entendessem bem o sistema de independência de camadas, pois como mostrámos, a camada de aplicação serve-se da camada de ligação de dados mas é independente do modo de agir desta, apenas lhe interessa como acede ao serviço disponibilizado.
+
+Quanto a possíveis melhorias, há a escolha do ficheiro a transferir (embora tenha sido implementada facilmente na demonstração), a adição de maior detalhe no registo de ocorrências e na verificação da integridade pela aplicação e a geração aleatória de erros em tramas de Informação.
+
+\newpage
+\appendix
+\section{Código fonte}
+\subsection{application\_layer.h}
+\lstinputlisting{res/code/application_layer.h}
+\newpage
+\subsection{application\_layer.c}
+\lstinputlisting{res/code/application_layer.c}
+\newpage
+\subsection{data\_link\_layer.h}
+\lstinputlisting{res/code/data_link_layer.h}
+\newpage
+\subsection{data\_link\_layer.c}
+\lstinputlisting{res/code/data_link_layer.c}
+\newpage
+\subsection{interface.c}
+\lstinputlisting{res/code/interface.c}
+\newpage
+\subsection{makefile}
+\begin{lstlisting}
+CC=gcc
+CFLAGS=-Wall -I.
+
+nserial: interface.c data_link_layer.o application_layer.o
+	$(CC) interface.c data_link_layer.o application_layer.o -o nserial $(CFLAGS)
+
+clean:
+	rm -f nserial *.o
+\end{lstlisting}
+
+\end{document}
