@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+
 #include "parse_url.h"
 
 void initialize_default_auth(url_info* info){
@@ -37,8 +42,22 @@ int parse_url(char url[], url_info* info){
     if(initialize_auth(info, url, at_position) != 0)
       return 1;
   }
+
+  char* first_slash = strchr(at_position, '/');
+  memcpy(info->host_url, at_position+1, first_slash-(at_position+1));
+  info->host_url[first_slash-(at_position+1)] = 0;
+
   char* last_slash = strrchr(url, '/');
   last_slash++;
+  memcpy(info->file_path, first_slash, last_slash-first_slash);
+  info->file_path[last_slash-first_slash] = 0;
+
   memcpy(info->filename, last_slash, strlen(last_slash) + 1);
+
+  if ((info->host_info=gethostbyname(info->host_url)) == NULL) {
+      herror("gethostbyname");
+      exit(1);
+  }
+
   return 0;
 }
