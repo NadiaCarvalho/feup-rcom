@@ -35,17 +35,20 @@ int parse_url(char url[], url_info* info){
     fprintf(stderr, "Your link must begin with 'ftp://'\n");
     return 1;
   }
-  char* at_position = strchr(url, '@');
-  if(at_position == NULL)
+  char* at_position = strrchr(url, '@');
+  if(at_position == NULL){
     initialize_default_auth(info);
+    at_position = url + strlen("ftp://");
+  }
   else{
     if(initialize_auth(info, url, at_position) != 0)
       return 1;
+    at_position++;
   }
 
   char* first_slash = strchr(at_position, '/');
-  memcpy(info->host_url, at_position+1, first_slash-(at_position+1));
-  info->host_url[first_slash-(at_position+1)] = 0;
+  memcpy(info->host_url, at_position, first_slash-at_position);
+  info->host_url[first_slash-at_position] = 0;
 
   char* last_slash = strrchr(url, '/');
   last_slash++;
@@ -53,11 +56,16 @@ int parse_url(char url[], url_info* info){
   info->file_path[last_slash-first_slash] = 0;
 
   memcpy(info->filename, last_slash, strlen(last_slash) + 1);
-
   if ((info->host_info=gethostbyname(info->host_url)) == NULL) {
-      herror("gethostbyname");
+      herror(info->host_url);
       exit(1);
   }
 
   return 0;
 }
+
+// int main(int argc, char* argv[]){
+//   url_info info;
+//   parse_url(argv[1], &info);
+//   return 0;
+// }
