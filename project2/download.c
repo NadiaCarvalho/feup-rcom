@@ -65,13 +65,19 @@ void login(int sockfd, url_info* info){
   sprintf(username_cmd, "USER %s\r\n", info->user);
   write_to_socket(sockfd, username_cmd, NULL);
   sprintf(password_cmd, "PASS %s\r\n", info->password);
-  write_to_socket(sockfd, password_cmd, NULL);
+  if(write_to_socket(sockfd, password_cmd, NULL) != 0){
+      fprintf(stderr, "Bad login. Exiting...\n"); //TODO: Ask for valid login
+      exit(1);
+  }
 }
 
 void enter_passive_mode(int sockfd, char* ip, int* port){
   char response[MAX_STRING_SIZE];
 
-  write_to_socket(sockfd, "PASV\r\n", response);
+  if(write_to_socket(sockfd, "PASV\r\n", response) != 0){
+    fprintf(stderr, "Error entering passive mode. Exiting...\n");
+    exit(1);
+  }
 
   int values[6];
   char* data = strchr(response, '(');
@@ -84,7 +90,10 @@ void send_retrieve(int control_socket_fd, int data_socket_fd, url_info* info){
   char cmd[MAX_STRING_SIZE];
 
   sprintf(cmd, "RETR %s%s\r\n", info->file_path, info->filename);
-  write_to_socket(control_socket_fd, cmd, NULL);
+  if(write_to_socket(control_socket_fd, cmd, NULL) != 0){
+    fprintf(stderr, "Error retrieving file. Exiting...\n");
+    exit(1);
+  }
 }
 
 int download_file(int data_socket_fd, url_info* info){
@@ -112,7 +121,12 @@ int download_file(int data_socket_fd, url_info* info){
 int close_connection(int control_socket_fd, int data_socket_fd){
 
   read_from_socket(control_socket_fd, NULL);
-  write_to_socket(control_socket_fd, "QUIT\r\n", NULL);
+  if(write_to_socket(control_socket_fd, "QUIT\r\n", NULL) != 0){
+    fprintf(stderr, "Error closing connection. Exiting anyway...\n");
+    close(data_socket_fd);
+    close(control_socket_fd);
+    exit(1);
+  }
 
   close(data_socket_fd);
   close(control_socket_fd);
@@ -154,4 +168,5 @@ int main(int argc, char** argv){
   download_file(data_socket_fd, &info);
   close_connection(control_socket_fd, data_socket_fd);
 
+  return 0;
 }
