@@ -1,11 +1,7 @@
 #include <stdio.h>
-// #include <sys/types.h>
-// #include <sys/socket.h>
-// #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <unistd.h>
-// #include <signal.h>
 #include <netdb.h>
 #include <string.h>
 
@@ -40,30 +36,42 @@ int create_connection(char* address, int port){
   return sockfd;
 }
 
-void read_from_socket(int sockfd, char* str){
+int read_from_socket(int sockfd, char* str){
+  int allocated = 0;
+  if(str == NULL){
+    str = (char*) malloc(sizeof(char) * MAX_STRING_SIZE);
+    allocated = 1;
+  }
   do {
     memset(str, 0, MAX_STRING_SIZE);
     read(sockfd, str, MAX_STRING_SIZE);
     printf("%s", str);
-  } while (!('1' <= str[0] && str[0] <= '5') || str[3]!=' ');
+  } while (str[0] == '4');
+  char reply_series = str[0];
+  if(allocated)
+    free(str);
+  return (reply_series > '4');
+}
+
+int write_to_socket(int sockfd, char* cmd, char* response){
+    write(sockfd, cmd, strlen(cmd));
+    return read_from_socket(sockfd, response);
 }
 
 void login(int sockfd, url_info* info){
 
-  char username_cmd[MAX_STRING_SIZE], password_cmd[MAX_STRING_SIZE], response[MAX_STRING_SIZE];
+  char username_cmd[MAX_STRING_SIZE], password_cmd[MAX_STRING_SIZE];
 
   sprintf(username_cmd, "USER %s\r\n", info->user);
-  write(sockfd, username_cmd, strlen(username_cmd));
-  read_from_socket(sockfd, response);
+  write_to_socket(sockfd, username_cmd, NULL);
   sprintf(password_cmd, "PASS %s\r\n", info->password);
-  write(sockfd, password_cmd, strlen(password_cmd));
-  read_from_socket(sockfd, response);
+  write_to_socket(sockfd, password_cmd, NULL);
 }
 
 void enter_passive_mode(int sockfd, char* ip, int* port){
   char response[MAX_STRING_SIZE];
-  write(sockfd, "PASV\r\n", strlen("PASV\r\n"));
-  read_from_socket(sockfd, response);
+
+  write_to_socket(sockfd, "PASV\r\n", response);
 
   int values[6];
   char* data = strchr(response, '(');
@@ -73,12 +81,10 @@ void enter_passive_mode(int sockfd, char* ip, int* port){
 }
 
 void send_retrieve(int control_socket_fd, int data_socket_fd, url_info* info){
-  char cmd[MAX_STRING_SIZE], response[MAX_STRING_SIZE];
+  char cmd[MAX_STRING_SIZE];
 
   sprintf(cmd, "RETR %s%s\r\n", info->file_path, info->filename);
-
-  write(control_socket_fd, cmd, strlen(cmd));
-  read_from_socket(control_socket_fd, response);
+  write_to_socket(control_socket_fd, cmd, NULL);
 }
 
 int download_file(int data_socket_fd, url_info* info){
@@ -99,6 +105,18 @@ int download_file(int data_socket_fd, url_info* info){
   }
 
   fclose(outfile);
+
+  return 0;
+}
+
+int close_connection(int control_socket_fd, int data_socket_fd){
+
+  read_from_socket(control_socket_fd, NULL);
+  write_to_socket(control_socket_fd, "QUIT\r\n", NULL);
+
+  close(data_socket_fd);
+  close(control_socket_fd);
+
   return 0;
 }
 
@@ -121,8 +139,7 @@ int main(int argc, char** argv){
     exit(1);
   }
 
-  char str[MAX_STRING_SIZE];
-  read_from_socket(control_socket_fd, str);
+  read_from_socket(control_socket_fd, NULL);
   login(control_socket_fd, &info);
   char data_address[MAX_STRING_SIZE];
   int port;
@@ -135,8 +152,6 @@ int main(int argc, char** argv){
   }
   send_retrieve(control_socket_fd, data_socket_fd, &info);
   download_file(data_socket_fd, &info);
-  //close_connection
-  close(data_socket_fd);
-  close(control_socket_fd);
+  close_connection(control_socket_fd, data_socket_fd);
 
 }
