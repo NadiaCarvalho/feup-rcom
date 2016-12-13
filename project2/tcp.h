@@ -9,7 +9,7 @@ void login(int control_socket_fd, url_info* info);
 
 void enter_passive_mode(int sockfd, char* ip, int* port);
 
-void send_retrieve(int control_socket_fd, int data_socket_fd, url_info* info);
+void send_retrieve(int control_socket_fd, url_info* info);
 
 int download_file(int data_socket_fd, url_info* info);
 

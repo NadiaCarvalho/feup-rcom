@@ -84,7 +84,7 @@ void enter_passive_mode(int sockfd, char* ip, int* port){
   *port = values[4]*256+values[5];
 }
 
-void send_retrieve(int control_socket_fd, int data_socket_fd, url_info* info){
+void send_retrieve(int control_socket_fd, url_info* info){
   char cmd[MAX_STRING_SIZE];
 
   sprintf(cmd, "RETR %s%s\r\n", info->file_path, info->filename);
