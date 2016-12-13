@@ -90,7 +90,7 @@ void enter_passive_mode(int sockfd, char* ip, int* port){
   *port = values[4]*256+values[5];
 }
 
-void send_retrieve(int control_socket_fd, int data_socket_fd, url_info* info){
+void send_retrieve(int control_socket_fd, url_info* info){
   char cmd[MAX_STRING_SIZE];
 
   write_to_socket(control_socket_fd, "TYPE L 8\r\n", NULL, READ);

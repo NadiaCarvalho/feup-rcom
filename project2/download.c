@@ -38,7 +38,7 @@ int main(int argc, char** argv){
     fprintf(stderr, "Error opening data connection\n");
     exit(1);
   }
-  send_retrieve(control_socket_fd, data_socket_fd, &info);
+  send_retrieve(control_socket_fd, &info);
   download_file(data_socket_fd, &info);
   close_connection(control_socket_fd, data_socket_fd);
 
