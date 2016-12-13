@@ -7,7 +7,11 @@
 
 #include "tcp.h"
 
+#define READ 1
+#define NO_READ 0
+
 int read_from_socket(int sockfd, char* str){
+  	FILE* fp = fdopen(sockfd, "r");
   int allocated = 0;
   if(str == NULL){
     str = (char*) malloc(sizeof(char) * MAX_STRING_SIZE);
@@ -15,18 +19,20 @@ int read_from_socket(int sockfd, char* str){
   }
   do {
     memset(str, 0, MAX_STRING_SIZE);
-    read(sockfd, str, MAX_STRING_SIZE);
+    str = fgets(str, MAX_STRING_SIZE, fp);
     printf("%s", str);
-  } while (str[0] == '4');
+}  while (!('1' <= str[0] && str[0] <= '5') || str[3] != ' ');
   char reply_series = str[0];
   if(allocated)
     free(str);
   return (reply_series > '4');
 }
 
-int write_to_socket(int sockfd, char* cmd, char* response){
-    write(sockfd, cmd, strlen(cmd));
-    return read_from_socket(sockfd, response);
+int write_to_socket(int sockfd, char* cmd, char* response, int read){
+    int return_val = write(sockfd, cmd, strlen(cmd));
+    if(read)
+      return read_from_socket(sockfd, response);
+    else return (return_val == 0);
 }
 
 int create_connection(char* address, int port){
@@ -61,9 +67,9 @@ void login(int control_socket_fd, url_info* info){
   read_from_socket(control_socket_fd, NULL);
 
   sprintf(username_cmd, "USER %s\r\n", info->user);
-  write_to_socket(control_socket_fd, username_cmd, NULL);
+  write_to_socket(control_socket_fd, username_cmd, NULL, READ);
   sprintf(password_cmd, "PASS %s\r\n", info->password);
-  if(write_to_socket(control_socket_fd, password_cmd, NULL) != 0){
+  if(write_to_socket(control_socket_fd, password_cmd, NULL, READ) != 0){
       fprintf(stderr, "Bad login. Exiting...\n"); //TODO: Ask for valid login
       exit(1);
   }
@@ -72,7 +78,7 @@ void login(int control_socket_fd, url_info* info){
 void enter_passive_mode(int sockfd, char* ip, int* port){
   char response[MAX_STRING_SIZE];
 
-  if(write_to_socket(sockfd, "PASV\r\n", response) != 0){
+  if(write_to_socket(sockfd, "PASV\r\n", response, READ) != 0){
     fprintf(stderr, "Error entering passive mode. Exiting...\n");
     exit(1);
   }
@@ -87,15 +93,20 @@ void enter_passive_mode(int sockfd, char* ip, int* port){
 void send_retrieve(int control_socket_fd, int data_socket_fd, url_info* info){
   char cmd[MAX_STRING_SIZE];
 
+  write_to_socket(control_socket_fd, "TYPE L 8\r\n", NULL, READ);
   sprintf(cmd, "RETR %s%s\r\n", info->file_path, info->filename);
-  if(write_to_socket(control_socket_fd, cmd, NULL) != 0){
+  if(write_to_socket(control_socket_fd, cmd, NULL, READ) != 0){
     fprintf(stderr, "Error retrieving file. Exiting...\n");
     exit(1);
   }
 }
 
 int download_file(int data_socket_fd, url_info* info){
-  FILE* outfile = fopen(info->filename, "w");
+  FILE* outfile;
+  if(!(outfile = fopen(info->filename, "w"))) {
+		printf("ERROR: Cannot open file.\n");
+		return 1;
+	}
 
   char buf[1024];
   int bytes;
@@ -113,13 +124,15 @@ int download_file(int data_socket_fd, url_info* info){
 
   fclose(outfile);
 
+  printf("Finished downloading file\n");
+
   return 0;
 }
 
 int close_connection(int control_socket_fd, int data_socket_fd){
 
-  read_from_socket(control_socket_fd, NULL);
-  if(write_to_socket(control_socket_fd, "QUIT\r\n", NULL) != 0){
+  printf("Closing connection\n");
+  if(write_to_socket(control_socket_fd, "QUIT\r\n", NULL, NO_READ) != 0){
     fprintf(stderr, "Error closing connection. Exiting anyway...\n");
     close(data_socket_fd);
     close(control_socket_fd);
@@ -128,6 +141,8 @@ int close_connection(int control_socket_fd, int data_socket_fd){
 
   close(data_socket_fd);
   close(control_socket_fd);
+
+  printf("Goodbye!\n");
 
   return 0;
 }

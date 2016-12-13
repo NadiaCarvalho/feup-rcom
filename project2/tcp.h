@@ -1,7 +1,7 @@
 #include "parse_url.h"
 
 #define CLIENT_CONNECTION_PORT 21
-#define MAX_STRING_SIZE 256
+#define MAX_STRING_SIZE 512
 
 int create_connection(char* address, int port);
 
