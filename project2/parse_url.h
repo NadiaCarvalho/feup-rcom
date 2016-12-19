@@ -11,7 +11,6 @@ typedef struct {
   char user[256];
   char password[256];
   char host_url[256];
-  char host_ip[256];
   struct hostent* host_info;
   char file_path[256];
   char filename[256];

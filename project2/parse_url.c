@@ -63,9 +63,3 @@ int parse_url(char url[], url_info* info){
 
   return 0;
 }
-
-// int main(int argc, char* argv[]){
-//   url_info info;
-//   parse_url(argv[1], &info);
-//   return 0;
-// }
